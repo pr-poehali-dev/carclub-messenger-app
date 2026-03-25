@@ -132,6 +132,7 @@ const API = "https://functions.poehali.dev/7f1b68b2-3be2-4063-bc44-6fdd024576b1"
 const AUTH_API = "https://functions.poehali.dev/a1192a6c-cacf-4b21-b110-e0a01c534f8d";
 const UPLOAD_AVATAR_API = "https://functions.poehali.dev/6b54dfba-6b17-4476-9ac2-f2563bb89adf";
 const ADMIN_API = "https://functions.poehali.dev/fd18bf34-6c49-4fab-83c5-fb58dc050170";
+const GALLERY_API = "https://functions.poehali.dev/bd3184a0-efb5-4842-84d5-9f4e3c45aa67";
 
 interface User {
   id: number;
@@ -836,92 +837,247 @@ function EventsScreen() {
 }
 
 // ─── GALLERY SCREEN ───────────────────────────────────────────────────────────
-function GalleryScreen() {
-  const [selected, setSelected] = useState<GalleryItem | null>(null);
-  const [filter, setFilter] = useState("Все");
+interface GFolder { id: number; name: string; coverUrl?: string; itemCount: number; }
+interface GItem { id: number; url: string; thumbnailUrl?: string; title: string; type: "photo" | "video"; likes: number; }
 
-  const filtered = filter === "Видео" ? gallery.filter(g => g.isVideo) : filter === "Фото" ? gallery.filter(g => !g.isVideo) : gallery;
+function GalleryScreen({ user, sessionId }: { user: User; sessionId: string }) {
+  const [folders, setFolders] = useState<GFolder[]>([]);
+  const [openFolder, setOpenFolder] = useState<GFolder | null>(null);
+  const [items, setItems] = useState<GItem[]>([]);
+  const [selectedItem, setSelectedItem] = useState<GItem | null>(null);
+  const [filter, setFilter] = useState<"all" | "photo" | "video">("all");
+  const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState("");
+  const [creatingFolder, setCreatingFolder] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (selected) {
-    return (
-      <div className="flex flex-col h-full animate-fade-in">
-        <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-          <button onClick={() => setSelected(null)} style={{ color: "rgba(255,255,255,0.5)" }}>
-            <Icon name="ChevronLeft" size={22} />
+  useEffect(() => {
+    setLoading(true);
+    fetch(`${GALLERY_API}?action=folders`)
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setFolders(d); }).finally(() => setLoading(false));
+  }, []);
+
+  const openFolderView = async (folder: GFolder) => {
+    setOpenFolder(folder);
+    setItems([]);
+    setFilter("all");
+    const res = await fetch(`${GALLERY_API}?action=items&folder_id=${folder.id}`);
+    const d = await res.json();
+    if (Array.isArray(d)) setItems(d);
+  };
+
+  const handleUpload = async (file: File) => {
+    if (!openFolder) return;
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(",")[1];
+      const res = await fetch(`${GALLERY_API}?action=upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+        body: JSON.stringify({ folder_id: openFolder.id, file: base64, content_type: file.type, title: file.name.replace(/\.[^.]+$/, "") }),
+      });
+      const d = await res.json();
+      if (res.ok) {
+        setItems(prev => [d, ...prev]);
+        setFolders(prev => prev.map(f => f.id === openFolder.id ? { ...f, itemCount: f.itemCount + 1, coverUrl: f.coverUrl || (d.type === "photo" ? d.url : f.coverUrl) } : f));
+      }
+      setUploading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleLike = async (item: GItem) => {
+    const res = await fetch(`${GALLERY_API}?action=like&item_id=${item.id}`, { method: "POST" });
+    const d = await res.json();
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, likes: d.likes } : i));
+    if (selectedItem?.id === item.id) setSelectedItem(prev => prev ? { ...prev, likes: d.likes } : prev);
+  };
+
+  const createFolder = async () => {
+    if (!newFolderName.trim()) return;
+    setCreatingFolder(true);
+    const res = await fetch(`${GALLERY_API}?action=create_folder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+      body: JSON.stringify({ name: newFolderName.trim() }),
+    });
+    const d = await res.json();
+    if (res.ok) { setFolders(prev => [...prev, d]); setNewFolderName(""); setNewFolderOpen(false); }
+    setCreatingFolder(false);
+  };
+
+  const filtered = items.filter(i => filter === "all" || i.type === filter);
+
+  // ── Просмотр файла ──
+  if (selectedItem) return (
+    <div className="flex flex-col h-full animate-fade-in" style={{ background: "#000" }}>
+      <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <button onClick={() => setSelectedItem(null)} style={{ color: "rgba(255,255,255,0.6)" }}>
+          <Icon name="ChevronLeft" size={22} />
+        </button>
+        <span className="flex-1 font-semibold text-white truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{selectedItem.title}</span>
+      </div>
+      <div className="flex-1 flex items-center justify-center overflow-hidden">
+        {selectedItem.type === "video" ? (
+          <video src={selectedItem.url} controls className="w-full max-h-full object-contain" />
+        ) : (
+          <img src={selectedItem.url} alt={selectedItem.title} className="w-full max-h-full object-contain" />
+        )}
+      </div>
+      <div className="px-5 py-4 flex items-center justify-between flex-shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+        <p className="text-sm" style={{ color: "rgba(255,255,255,0.5)" }}>{selectedItem.type === "video" ? "🎬 Видео" : "📷 Фото"}</p>
+        <div className="flex items-center gap-4">
+          <button onClick={() => handleLike(selectedItem)} className="flex items-center gap-1.5 text-sm transition-all" style={{ color: "rgba(255,255,255,0.6)" }}>
+            <Icon name="Heart" size={18} style={{ color: "#ff6b6b" }} />
+            <span>{selectedItem.likes}</span>
           </button>
-          <span className="font-semibold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>{selected.title}</span>
-        </div>
-        <div className={`mx-4 mt-4 rounded-2xl h-64 relative flex items-center justify-center text-8xl bg-gradient-to-br ${selected.bg}`}
-          style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
-          {selected.isVideo && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="w-16 h-16 rounded-full flex items-center justify-center z-10"
-                style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.2)" }}>
-                <Icon name="Play" size={28} style={{ color: "white" }} />
-              </div>
-            </div>
-          )}
-          <span className="relative z-0">{selected.emoji}</span>
-        </div>
-        <div className="px-4 mt-4 flex items-center justify-between">
-          <div>
-            <h3 className="font-bold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>{selected.title}</h3>
-            <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>{selected.event}</p>
-          </div>
-          <div className="flex items-center gap-4">
-            <button className="flex items-center gap-1.5 text-sm transition-all" style={{ color: "rgba(255,255,255,0.5)" }}>
-              <Icon name="Heart" size={18} />
-              <span>{selected.likes}</span>
-            </button>
-            <button style={{ color: "rgba(255,255,255,0.5)" }}><Icon name="Share2" size={18} /></button>
-            <button style={{ color: "rgba(255,255,255,0.5)" }}><Icon name="Download" size={18} /></button>
-          </div>
+          <a href={selectedItem.url} download target="_blank" rel="noreferrer" style={{ color: "rgba(255,255,255,0.5)" }}>
+            <Icon name="Download" size={18} />
+          </a>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
-  return (
+  // ── Содержимое папки ──
+  if (openFolder) return (
     <div className="flex flex-col h-full animate-fade-in">
-      <div className="px-4 pt-4 pb-3 flex items-center justify-between">
-        <h2 className="font-bold text-xl text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Галерея</h2>
-        <button className="neon-btn text-xs px-3 py-1.5 rounded-lg flex items-center gap-1" style={{ fontFamily: '"Exo 2", sans-serif' }}>
-          <Icon name="Upload" size={14} />
+      <div className="flex items-center gap-3 px-4 py-3 flex-shrink-0" style={{ borderBottom: "1px solid rgba(0,255,179,0.1)" }}>
+        <button onClick={() => setOpenFolder(null)} style={{ color: "rgba(255,255,255,0.5)" }}>
+          <Icon name="ChevronLeft" size={22} />
+        </button>
+        <span className="flex-1 font-bold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>{openFolder.name}</span>
+        <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+          className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl font-semibold transition-all"
+          style={{ fontFamily: '"Exo 2", sans-serif', background: "rgba(0,255,179,0.12)", border: "1px solid rgba(0,255,179,0.3)", color: "var(--neon-green)", opacity: uploading ? 0.6 : 1 }}>
+          {uploading ? <div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} /> : <Icon name="Upload" size={13} />}
           Загрузить
         </button>
+        <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }} />
       </div>
 
-      <div className="flex gap-2 px-4 mb-3">
-        {["Все", "Фото", "Видео"].map(f => (
-          <button key={f} onClick={() => setFilter(f)} className="text-xs px-3 py-1.5 rounded-lg transition-all"
-            style={{ fontFamily: '"Exo 2", sans-serif', background: filter === f ? "rgba(0,255,179,0.12)" : "rgba(255,255,255,0.05)", color: filter === f ? "var(--neon-green)" : "rgba(255,255,255,0.5)", border: filter === f ? "1px solid rgba(0,255,179,0.3)" : "1px solid rgba(255,255,255,0.08)" }}>
-            {f}
+      <div className="flex gap-2 px-4 py-2 flex-shrink-0">
+        {([["all", "Все"], ["photo", "Фото"], ["video", "Видео"]] as const).map(([val, label]) => (
+          <button key={val} onClick={() => setFilter(val)} className="text-xs px-3 py-1 rounded-lg transition-all"
+            style={{ fontFamily: '"Exo 2", sans-serif', background: filter === val ? "rgba(0,255,179,0.12)" : "rgba(255,255,255,0.05)", color: filter === val ? "var(--neon-green)" : "rgba(255,255,255,0.45)", border: filter === val ? "1px solid rgba(0,255,179,0.3)" : "1px solid rgba(255,255,255,0.08)" }}>
+            {label}
           </button>
         ))}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4">
-        <div className="grid grid-cols-2 gap-3">
-          {filtered.map((item, i) => (
-            <button key={item.id} onClick={() => setSelected(item)}
-              className={`relative rounded-xl overflow-hidden aspect-square bg-gradient-to-br ${item.bg} flex items-center justify-center text-5xl transition-all animate-fade-in`}
-              style={{ border: "1px solid rgba(255,255,255,0.07)", animationDelay: `${i * 0.05}s` }}>
-              <span>{item.emoji}</span>
-              {item.isVideo && (
-                <div className="absolute top-2 left-2 flex items-center gap-1 rounded-md px-1.5 py-0.5"
-                  style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}>
-                  <Icon name="Play" size={10} style={{ color: "white" }} />
-                  <span className="text-white" style={{ fontSize: "10px" }}>Видео</span>
+        {filtered.length === 0 && !uploading ? (
+          <div className="flex flex-col items-center justify-center h-40 gap-3">
+            <Icon name="Image" size={36} style={{ color: "rgba(255,255,255,0.15)" }} />
+            <p className="text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>Нет файлов. Загрузи первый!</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-3 gap-1.5">
+            {filtered.map(item => (
+              <button key={item.id} onClick={() => setSelectedItem(item)}
+                className="relative aspect-square rounded-xl overflow-hidden"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                {item.type === "video" ? (
+                  <div className="w-full h-full flex items-center justify-center"
+                    style={{ background: "linear-gradient(135deg, rgba(191,0,255,0.2), rgba(0,212,255,0.15))" }}>
+                    <Icon name="Play" size={24} style={{ color: "rgba(255,255,255,0.7)" }} />
+                  </div>
+                ) : (
+                  <img src={item.thumbnailUrl || item.url} alt={item.title} className="w-full h-full object-cover" />
+                )}
+                {item.type === "video" && (
+                  <div className="absolute top-1 left-1 rounded px-1 py-0.5"
+                    style={{ background: "rgba(0,0,0,0.7)", fontSize: "9px", color: "#fff" }}>▶ Видео</div>
+                )}
+                <div className="absolute bottom-1 right-1 flex items-center gap-0.5 rounded px-1 py-0.5"
+                  style={{ background: "rgba(0,0,0,0.6)", fontSize: "9px", color: "#fff" }}>
+                  ❤ {item.likes}
                 </div>
-              )}
-              <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-md px-1.5 py-0.5"
-                style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}>
-                <Icon name="Heart" size={10} style={{ color: "#ff6b6b" }} />
-                <span className="text-white" style={{ fontSize: "10px" }}>{item.likes}</span>
-              </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  // ── Список папок ──
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      {newFolderOpen && (
+        <div className="absolute inset-0 z-50 flex items-end justify-center"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+          onClick={e => { if (e.target === e.currentTarget) setNewFolderOpen(false); }}>
+          <div className="w-full max-w-sm rounded-t-3xl p-6 animate-fade-in"
+            style={{ background: "var(--bg-dark)", border: "1px solid rgba(0,255,179,0.15)", borderBottom: "none" }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Новая папка</h3>
+              <button onClick={() => setNewFolderOpen(false)}><Icon name="X" size={20} style={{ color: "rgba(255,255,255,0.4)" }} /></button>
+            </div>
+            <input value={newFolderName} onChange={e => setNewFolderName(e.target.value)}
+              placeholder="Название папки"
+              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none mb-3"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }}
+              onKeyDown={e => e.key === "Enter" && createFolder()} />
+            <button onClick={createFolder} disabled={creatingFolder || !newFolderName.trim()}
+              className="neon-btn-filled w-full rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2"
+              style={{ fontFamily: '"Exo 2", sans-serif', opacity: creatingFolder ? 0.7 : 1 }}>
+              {creatingFolder ? <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} /> : <Icon name="FolderPlus" size={15} />}
+              Создать
             </button>
-          ))}
+          </div>
         </div>
+      )}
+
+      <div className="px-4 pt-4 pb-3 flex items-center justify-between flex-shrink-0">
+        <h2 className="font-bold text-xl text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Галерея</h2>
+        {user.isAdmin && (
+          <button onClick={() => setNewFolderOpen(true)}
+            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl font-semibold"
+            style={{ fontFamily: '"Exo 2", sans-serif', background: "rgba(0,255,179,0.1)", border: "1px solid rgba(0,255,179,0.25)", color: "var(--neon-green)" }}>
+            <Icon name="FolderPlus" size={13} />
+            Папка
+          </button>
+        )}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} />
+          </div>
+        ) : folders.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-40 gap-3">
+            <Icon name="FolderOpen" size={40} style={{ color: "rgba(255,255,255,0.15)" }} />
+            <p className="text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>Папок пока нет</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {folders.map((folder, i) => (
+              <button key={folder.id} onClick={() => openFolderView(folder)}
+                className="relative rounded-2xl overflow-hidden aspect-square transition-all animate-fade-in"
+                style={{ border: "1px solid rgba(255,255,255,0.08)", animationDelay: `${i * 0.04}s` }}>
+                {folder.coverUrl ? (
+                  <img src={folder.coverUrl} alt={folder.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center"
+                    style={{ background: "linear-gradient(135deg, rgba(0,255,179,0.1), rgba(0,212,255,0.08))" }}>
+                    <Icon name="Folder" size={40} style={{ color: "rgba(0,255,179,0.4)" }} />
+                  </div>
+                )}
+                <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 60%)" }} />
+                <div className="absolute bottom-0 left-0 right-0 px-3 py-2.5">
+                  <p className="font-bold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{folder.name}</p>
+                  <p className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>{folder.itemCount} файлов</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1906,7 +2062,7 @@ export default function Index() {
             <div className="flex-1 overflow-hidden">
               {tab === "chats" && <ChatsScreen user={session.user} sessionId={session.session_id} />}
               {tab === "events" && <EventsScreen />}
-              {tab === "gallery" && <GalleryScreen />}
+              {tab === "gallery" && <GalleryScreen user={session.user} sessionId={session.session_id} />}
               {tab === "members" && <MembersScreen />}
               {tab === "search" && <SearchScreen />}
               {tab === "settings" && <SettingsScreen user={session.user} sessionId={session.session_id} onAvatarChange={handleAvatarChange} onProfileUpdate={handleProfileUpdate} />}

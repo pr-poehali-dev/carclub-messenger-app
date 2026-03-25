@@ -1,0 +1,33 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET folders — список папок",
+      "method": "GET",
+      "path": "/?action=folders",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET items — файлы папки 1",
+      "method": "GET",
+      "path": "/?action=items&folder_id=1",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST upload — без авторизации → 401",
+      "method": "POST",
+      "path": "/?action=upload",
+      "body": {"folder_id": 1, "file": "abc"},
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
