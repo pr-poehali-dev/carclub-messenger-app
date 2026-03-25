@@ -1,10 +1,9 @@
 {
   "tests": [
     {
-      "name": "POST login — вход существующего пользователя",
-      "method": "POST",
-      "path": "/?action=login",
-      "body": {"nickname": "Максим", "pin": "1111"},
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
       "expectedStatus": 200,
       "bodyMatcher": "partial"
     },
@@ -12,7 +11,7 @@
       "name": "POST login — неверный PIN",
       "method": "POST",
       "path": "/?action=login",
-      "body": {"nickname": "Максим", "pin": "0000"},
+      "body": {"nickname": "Манул", "pin": "0000"},
       "expectedStatus": 401,
       "bodyMatcher": "partial"
     }

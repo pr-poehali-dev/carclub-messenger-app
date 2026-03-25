@@ -199,6 +199,7 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   const [allMembers, setAllMembers] = useState<User[]>([]);
   const [memberSaving, setMemberSaving] = useState<number | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [deletingChatId, setDeletingChatId] = useState<number | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -331,6 +332,21 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  };
+
+  const deleteChat = async (chatId: number) => {
+    if (!window.confirm("Удалить этот чат для всех участников?")) return;
+    setDeletingChatId(chatId);
+    const res = await fetch(`${ADMIN_API}?action=delete_chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+      body: JSON.stringify({ chat_id: chatId }),
+    });
+    if (res.ok) {
+      setChatList(prev => prev.filter(c => c.id !== chatId));
+      if (activeChat?.id === chatId) closeChat();
+    }
+    setDeletingChatId(null);
   };
 
   const openNewChat = async () => {
@@ -509,9 +525,15 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
               <Icon name="Users" size={18} />
             </button>
           )}
-          <button className="transition-colors ml-1" style={{ color: "rgba(255,255,255,0.5)" }}>
-            <Icon name="MoreVertical" size={18} />
-          </button>
+          {user.isAdmin && (
+            <button onClick={() => deleteChat(activeChat.id)} disabled={deletingChatId === activeChat.id}
+              className="transition-colors ml-1"
+              style={{ color: deletingChatId === activeChat.id ? "rgba(255,77,77,0.4)" : "rgba(255,77,77,0.7)" }}>
+              {deletingChatId === activeChat.id
+                ? <div className="w-4 h-4 rounded-full border animate-spin" style={{ borderColor: "rgba(255,77,77,0.3)", borderTopColor: "#ff4d4d" }} />
+                : <Icon name="Trash2" size={18} />}
+            </button>
+          )}
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
@@ -1430,6 +1452,7 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
   const [savingRoleId, setSavingRoleId] = useState<number | null>(null);
   const [detailsMap, setDetailsMap] = useState<Record<number, { phone?: string; birthDate?: string } | null>>({});
   const [loadingDetailsId, setLoadingDetailsId] = useState<number | null>(null);
+  const [removingUserId, setRemovingUserId] = useState<number | null>(null);
   const [newChatName, setNewChatName] = useState("");
   const [newChatEmoji, setNewChatEmoji] = useState("💬");
   const [newChatPrivate, setNewChatPrivate] = useState(false);
@@ -1514,6 +1537,20 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
     const d = await res.json();
     setDetailsMap(prev => ({ ...prev, [memberId]: res.ok ? d : null }));
     setLoadingDetailsId(null);
+  };
+
+  const removeUser = async (memberId: number, nickname: string) => {
+    if (!window.confirm(`Удалить участника «${nickname}» из клуба?`)) return;
+    setRemovingUserId(memberId);
+    const res = await fetch(`${ADMIN_API}?action=remove_user`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+      body: JSON.stringify({ user_id: memberId }),
+    });
+    if (res.ok) {
+      setManageMembers(prev => prev.filter(m => m.id !== memberId));
+    }
+    setRemovingUserId(null);
   };
 
   const [editNickname, setEditNickname] = useState(user.nickname);
@@ -2094,6 +2131,16 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
                         ? <div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: "rgba(255,255,255,0.2)", borderTopColor: "rgba(255,255,255,0.6)" }} />
                         : <Icon name="Info" size={13} style={{ color: "rgba(255,255,255,0.45)" }} />}
                     </button>
+                    {/* Кнопка удаления участника — только для основателя */}
+                    {user.isFounder && !m.isFounder && (
+                      <button onClick={() => removeUser(m.id, m.nickname)} disabled={removingUserId === m.id}
+                        className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+                        style={{ background: "rgba(255,77,77,0.08)", border: "1px solid rgba(255,77,77,0.2)" }}>
+                        {removingUserId === m.id
+                          ? <div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: "rgba(255,77,77,0.3)", borderTopColor: "#ff4d4d" }} />
+                          : <Icon name="UserX" size={13} style={{ color: "#ff6b6b" }} />}
+                      </button>
+                    )}
                   </div>
 
                 )}

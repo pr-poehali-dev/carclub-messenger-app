@@ -74,7 +74,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(f"""
             SELECT id, nickname, car, role, level, level_color, points, avatar_url, is_admin, is_founder
             FROM {SCHEMA}.users
-            WHERE LOWER(nickname) = LOWER(%s) AND pin = %s
+            WHERE LOWER(nickname) = LOWER(%s) AND pin = %s AND is_removed = false
         """, (nickname, hash_pin(pin)))
         row = cur.fetchone()
         if not row:

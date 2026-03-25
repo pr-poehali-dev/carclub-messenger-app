@@ -1,0 +1,1 @@
+UPDATE t_p76085414_carclub_messenger_ap.users SET is_removed = true WHERE LOWER(nickname) != 'манул';

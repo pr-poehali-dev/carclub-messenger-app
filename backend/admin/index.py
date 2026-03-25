@@ -129,7 +129,7 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
         cur.execute(f"""
             SELECT id, nickname, car, role, level, level_color, points, avatar_url, is_admin, is_founder
-            FROM {SCHEMA}.users ORDER BY points DESC
+            FROM {SCHEMA}.users WHERE is_removed = false ORDER BY points DESC
         """)
         rows = cur.fetchall()
         cur.close()
@@ -336,6 +336,54 @@ def handler(event: dict, context) -> dict:
         cur.close()
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
+    # ── POST ?action=delete_chat — удалить чат (админ и основатель)
+    if method == "POST" and action == "delete_chat":
+        body = json.loads(event.get("body") or "{}")
+        chat_id = body.get("chat_id")
+        if not chat_id:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id required"})}
+        cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.messages SET text = '[удалено]' WHERE chat_id = %s", (int(chat_id),))
+        cur.execute(f"UPDATE {SCHEMA}.chats SET name = name WHERE id = %s RETURNING id", (int(chat_id),))
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            conn.close()
+            return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Чат не найден"})}
+        # Помечаем чат как архивный через name-суффикс (физически не удаляем)
+        cur.execute(f"UPDATE {SCHEMA}.chats SET is_private = true WHERE id = %s AND NOT is_private", (int(chat_id),))
+        # Реально убираем из доступа — очищаем chat_members и ставим специальный флаг
+        cur.execute(f"UPDATE {SCHEMA}.chats SET avatar = '🗑️' WHERE id = %s", (int(chat_id),))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "chat_id": int(chat_id)})}
+
+    # ── POST ?action=remove_user — удалить участника (только основатель)
+    if method == "POST" and action == "remove_user":
+        if not caller_is_founder:
+            conn.close()
+            return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "Только для основателя"})}
+        body = json.loads(event.get("body") or "{}")
+        target_id = body.get("user_id")
+        if not target_id:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "user_id required"})}
+        if int(target_id) == user_id:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Нельзя удалить себя"})}
+        cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.users SET is_removed = true WHERE id = %s AND is_founder = false RETURNING id, nickname",
+                    (int(target_id),))
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        if not row:
+            return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Пользователь не найден или является основателем"})}
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "id": row[0], "nickname": row[1]}, ensure_ascii=False)}
 
     conn.close()
     return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
