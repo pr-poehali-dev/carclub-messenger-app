@@ -1,0 +1,33 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET rules — без авторизации (публично)",
+      "method": "GET",
+      "path": "/?action=rules",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET members — список участников",
+      "method": "GET",
+      "path": "/?action=members",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST rules — без сессии → 401",
+      "method": "POST",
+      "path": "/?action=rules",
+      "body": {"content": "test"},
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    }
+  ]
+}

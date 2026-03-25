@@ -127,6 +127,7 @@ const members: Member[] = [
 const API = "https://functions.poehali.dev/7f1b68b2-3be2-4063-bc44-6fdd024576b1";
 const AUTH_API = "https://functions.poehali.dev/a1192a6c-cacf-4b21-b110-e0a01c534f8d";
 const UPLOAD_AVATAR_API = "https://functions.poehali.dev/6b54dfba-6b17-4476-9ac2-f2563bb89adf";
+const ADMIN_API = "https://functions.poehali.dev/fd18bf34-6c49-4fab-83c5-fb58dc050170";
 
 interface User {
   id: number;
@@ -137,6 +138,7 @@ interface User {
   levelColor: string;
   points: number;
   avatarUrl?: string | null;
+  isAdmin?: boolean;
 }
 
 const SESSION_KEY = "motoclub_session";
@@ -210,13 +212,16 @@ function NeonBadge({ label, color }: { label: string; color: string }) {
 }
 
 // ─── CHATS SCREEN ─────────────────────────────────────────────────────────────
-function ChatsScreen() {
+function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   const [chatList, setChatList] = useState<Chat[]>(chats);
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [msgText, setMsgText] = useState("");
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [newChatOpen, setNewChatOpen] = useState(false);
+  const [membersList, setMembersList] = useState<User[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastIdRef = useRef(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -286,6 +291,28 @@ function ChatsScreen() {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   };
 
+  const openNewChat = async () => {
+    setNewChatOpen(true);
+    setMembersLoading(true);
+    const res = await fetch(`${ADMIN_API}?action=members`);
+    const data = await res.json();
+    setMembersLoading(false);
+    if (Array.isArray(data)) setMembersList(data.filter((m: User) => m.id !== user.id));
+  };
+
+  const startChat = async (member: User) => {
+    setNewChatOpen(false);
+    const existing = chatList.find(c => !c.isGroup && c.name === member.nickname);
+    if (existing) { openChat(existing); return; }
+    const newChat: Chat = {
+      id: Date.now(), name: member.nickname,
+      avatar: member.avatarUrl ? member.avatarUrl : member.nickname[0].toUpperCase(),
+      lastMsg: "", time: "", unread: 0, online: false, isGroup: false, messages: [],
+    };
+    setChatList(prev => [newChat, ...prev]);
+    openChat(newChat);
+  };
+
   if (activeChat) {
     return (
       <div className="flex flex-col h-full animate-fade-in">
@@ -351,6 +378,43 @@ function ChatsScreen() {
 
   return (
     <div className="flex flex-col h-full animate-fade-in">
+      {/* Модал выбора участника */}
+      {newChatOpen && (
+        <div className="absolute inset-0 z-50 flex items-end justify-center"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+          onClick={e => { if (e.target === e.currentTarget) setNewChatOpen(false); }}>
+          <div className="w-full max-w-sm rounded-t-3xl p-5 animate-fade-in"
+            style={{ background: "var(--bg-dark)", border: "1px solid rgba(0,255,179,0.15)", borderBottom: "none", maxHeight: "70vh", display: "flex", flexDirection: "column" }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-lg text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Новый чат</h3>
+              <button onClick={() => setNewChatOpen(false)}><Icon name="X" size={20} style={{ color: "rgba(255,255,255,0.5)" }} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-1">
+              {membersLoading && (
+                <div className="flex justify-center py-8">
+                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} />
+                </div>
+              )}
+              {membersList.map(m => (
+                <button key={m.id} onClick={() => startChat(m)}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left transition-all"
+                  style={{ background: "rgba(255,255,255,0.03)" }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white overflow-hidden flex-shrink-0"
+                    style={{ background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "1px solid rgba(0,255,179,0.25)" }}>
+                    {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" /> : m.nickname[0].toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{m.nickname}</div>
+                    <div className="text-xs truncate" style={{ color: "rgba(255,255,255,0.4)" }}>{m.car || m.role}</div>
+                  </div>
+                  <NeonBadge label={m.level} color={m.levelColor} />
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="px-4 pt-4 pb-3">
         <h2 className="font-bold text-xl text-white mb-3" style={{ fontFamily: '"Exo 2", sans-serif' }}>Чаты</h2>
         <div className="flex items-center gap-2 rounded-xl px-3 py-2.5"
@@ -386,7 +450,7 @@ function ChatsScreen() {
       </div>
 
       <div className="px-4 pb-4 pt-2">
-        <button className="neon-btn-filled w-full rounded-xl py-3 flex items-center justify-center gap-2 font-semibold text-sm"
+        <button onClick={openNewChat} className="neon-btn-filled w-full rounded-xl py-3 flex items-center justify-center gap-2 font-semibold text-sm"
           style={{ fontFamily: '"Exo 2", sans-serif' }}>
           <Icon name="Plus" size={16} />
           Новый чат
@@ -774,6 +838,92 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
   const [sound, setSound] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [panel, setPanel] = useState<"rules" | "rating" | "manage" | null>(null);
+
+  // ── Правила клуба ──
+  const [rules, setRules] = useState("");
+  const [rulesLoading, setRulesLoading] = useState(false);
+  const [rulesSaving, setRulesSaving] = useState(false);
+
+  const openRules = async () => {
+    setPanel("rules");
+    setRulesLoading(true);
+    const res = await fetch(`${ADMIN_API}?action=rules`);
+    const d = await res.json();
+    setRules(d.content || "");
+    setRulesLoading(false);
+  };
+
+  const saveRules = async () => {
+    setRulesSaving(true);
+    await fetch(`${ADMIN_API}?action=rules`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+      body: JSON.stringify({ content: rules }),
+    });
+    setRulesSaving(false);
+  };
+
+  // ── Система рейтинга ──
+  const [ratingMembers, setRatingMembers] = useState<User[]>([]);
+  const [ratingLoading, setRatingLoading] = useState(false);
+  const [deltaMap, setDeltaMap] = useState<Record<number, string>>({});
+  const [savingId, setSavingId] = useState<number | null>(null);
+
+  const openRating = async () => {
+    setPanel("rating");
+    setRatingLoading(true);
+    const res = await fetch(`${ADMIN_API}?action=members`);
+    const d = await res.json();
+    if (Array.isArray(d)) setRatingMembers(d);
+    setRatingLoading(false);
+  };
+
+  const applyDelta = async (memberId: number) => {
+    const delta = parseInt(deltaMap[memberId] || "0");
+    if (!delta) return;
+    setSavingId(memberId);
+    const res = await fetch(`${ADMIN_API}?action=rating`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+      body: JSON.stringify({ user_id: memberId, delta }),
+    });
+    const d = await res.json();
+    if (res.ok) {
+      setRatingMembers(prev => prev.map(m => m.id === memberId ? { ...m, points: d.points } : m));
+      setDeltaMap(prev => ({ ...prev, [memberId]: "" }));
+    }
+    setSavingId(null);
+  };
+
+  // ── Управление клубом ──
+  const [manageMembers, setManageMembers] = useState<User[]>([]);
+  const [manageLoading, setManageLoading] = useState(false);
+  const [newChatName, setNewChatName] = useState("");
+  const [newChatEmoji, setNewChatEmoji] = useState("💬");
+  const [creatingChat, setCreatingChat] = useState(false);
+  const [chatCreated, setChatCreated] = useState(false);
+
+  const openManage = async () => {
+    setPanel("manage");
+    setManageLoading(true);
+    const res = await fetch(`${ADMIN_API}?action=members`);
+    const d = await res.json();
+    if (Array.isArray(d)) setManageMembers(d);
+    setManageLoading(false);
+  };
+
+  const createGroupChat = async () => {
+    if (!newChatName.trim()) return;
+    setCreatingChat(true);
+    const res = await fetch(`${ADMIN_API}?action=create_chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+      body: JSON.stringify({ name: newChatName.trim(), avatar: newChatEmoji }),
+    });
+    setCreatingChat(false);
+    if (res.ok) { setChatCreated(true); setNewChatName(""); setTimeout(() => setChatCreated(false), 3000); }
+  };
   const [editNickname, setEditNickname] = useState(user.nickname);
   const [editCar, setEditCar] = useState(user.car || "");
   const [editLoading, setEditLoading] = useState(false);
@@ -967,21 +1117,36 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
           <div className="text-xs font-semibold uppercase tracking-wider mb-2 px-1"
             style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>Клуб</div>
           <div className="glass-card rounded-xl overflow-hidden">
-            {[
-              { icon: "Users", label: "Управление клубом" },
-              { icon: "Shield", label: "Правила клуба" },
-              { icon: "Star", label: "Система рейтинга" },
-            ].map((item, idx, arr) => (
-              <div key={item.label} className="flex items-center gap-3 px-4 py-3.5"
-                style={{ borderBottom: idx < arr.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+            {user.isAdmin && (
+              <button onClick={openManage} className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+                style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
                 <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                   style={{ background: "rgba(0,255,179,0.08)", border: "1px solid rgba(0,255,179,0.15)" }}>
-                  <Icon name={item.icon} size={14} style={{ color: "var(--neon-green)" }} />
+                  <Icon name="Users" size={14} style={{ color: "var(--neon-green)" }} />
                 </div>
-                <span className="flex-1 text-white text-sm">{item.label}</span>
+                <span className="flex-1 text-white text-sm">Управление клубом</span>
+                <span className="text-xs px-2 py-0.5 rounded-full font-semibold mr-2" style={{ background: "rgba(0,255,179,0.1)", color: "var(--neon-green)", border: "1px solid rgba(0,255,179,0.2)" }}>Адм</span>
                 <span className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>→</span>
+              </button>
+            )}
+            <button onClick={openRules} className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: "rgba(0,255,179,0.08)", border: "1px solid rgba(0,255,179,0.15)" }}>
+                <Icon name="Shield" size={14} style={{ color: "var(--neon-green)" }} />
               </div>
-            ))}
+              <span className="flex-1 text-white text-sm">Правила клуба</span>
+              <span className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>→</span>
+            </button>
+            <button onClick={openRating} className="w-full flex items-center gap-3 px-4 py-3.5 text-left">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: "rgba(0,255,179,0.08)", border: "1px solid rgba(0,255,179,0.15)" }}>
+                <Icon name="Star" size={14} style={{ color: "var(--neon-green)" }} />
+              </div>
+              <span className="flex-1 text-white text-sm">Система рейтинга</span>
+              {user.isAdmin && <span className="text-xs px-2 py-0.5 rounded-full font-semibold mr-2" style={{ background: "rgba(0,255,179,0.1)", color: "var(--neon-green)", border: "1px solid rgba(0,255,179,0.2)" }}>Адм</span>}
+              <span className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>→</span>
+            </button>
           </div>
         </div>
 
@@ -992,6 +1157,153 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
           Выйти из аккаунта
         </button>
       </div>
+
+      {/* ── Панель: Правила клуба ── */}
+      {panel === "rules" && (
+        <div className="absolute inset-0 z-50 flex flex-col animate-fade-in"
+          style={{ background: "var(--bg-dark)" }}>
+          <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: "1px solid rgba(0,255,179,0.1)" }}>
+            <button onClick={() => setPanel(null)}><Icon name="ChevronLeft" size={22} style={{ color: "rgba(255,255,255,0.6)" }} /></button>
+            <h3 className="font-bold text-lg text-white flex-1" style={{ fontFamily: '"Exo 2", sans-serif' }}>Правила клуба</h3>
+            {user.isAdmin && (
+              <button onClick={saveRules} disabled={rulesSaving}
+                className="px-3 py-1.5 rounded-xl text-sm font-semibold flex items-center gap-1.5"
+                style={{ background: "var(--neon-green)", color: "#000", opacity: rulesSaving ? 0.7 : 1, fontFamily: '"Exo 2", sans-serif' }}>
+                {rulesSaving ? <div className="w-3.5 h-3.5 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,0,0,0.2)", borderTopColor: "#000" }} /> : <Icon name="Check" size={14} />}
+                Сохранить
+              </button>
+            )}
+          </div>
+          <div className="flex-1 overflow-y-auto p-4">
+            {rulesLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} />
+              </div>
+            ) : user.isAdmin ? (
+              <textarea value={rules} onChange={e => setRules(e.target.value)}
+                className="w-full h-full min-h-[300px] rounded-xl px-4 py-3 text-sm text-white outline-none resize-none"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(0,255,179,0.15)", lineHeight: "1.7" }} />
+            ) : (
+              <div className="glass-card rounded-xl p-4">
+                <p className="text-sm text-white whitespace-pre-line" style={{ lineHeight: "1.8", color: "rgba(255,255,255,0.85)" }}>{rules || "Правила не установлены."}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Панель: Система рейтинга ── */}
+      {panel === "rating" && (
+        <div className="absolute inset-0 z-50 flex flex-col animate-fade-in"
+          style={{ background: "var(--bg-dark)" }}>
+          <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: "1px solid rgba(0,255,179,0.1)" }}>
+            <button onClick={() => setPanel(null)}><Icon name="ChevronLeft" size={22} style={{ color: "rgba(255,255,255,0.6)" }} /></button>
+            <h3 className="font-bold text-lg text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>
+              {user.isAdmin ? "Управление рейтингом" : "Рейтинг участников"}
+            </h3>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {ratingLoading ? (
+              <div className="flex justify-center py-12">
+                <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} />
+              </div>
+            ) : ratingMembers.map((m, idx) => (
+              <div key={m.id} className="glass-card rounded-xl p-3 flex items-center gap-3"
+                style={{ border: "1px solid rgba(0,255,179,0.08)" }}>
+                <span className="text-sm font-bold w-5 text-center flex-shrink-0" style={{ color: idx < 3 ? "var(--neon-green)" : "rgba(255,255,255,0.3)" }}>
+                  {idx + 1}
+                </span>
+                <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white overflow-hidden flex-shrink-0"
+                  style={{ background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "1px solid rgba(0,255,179,0.2)" }}>
+                  {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" /> : m.nickname[0].toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{m.nickname}</div>
+                  <div className="text-xs" style={{ color: m.levelColor || "var(--neon-green)" }}>{m.level} · {m.points} очков</div>
+                </div>
+                {user.isAdmin && (
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <input value={deltaMap[m.id] || ""} onChange={e => setDeltaMap(p => ({ ...p, [m.id]: e.target.value }))}
+                      type="number" placeholder="±0"
+                      className="w-16 rounded-lg px-2 py-1.5 text-xs text-white text-center outline-none"
+                      style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(0,255,179,0.2)" }} />
+                    <button onClick={() => applyDelta(m.id)} disabled={savingId === m.id || !deltaMap[m.id]}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+                      style={{ background: "var(--neon-green)", opacity: savingId === m.id ? 0.6 : 1 }}>
+                      {savingId === m.id
+                        ? <div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,0,0,0.2)", borderTopColor: "#000" }} />
+                        : <Icon name="Check" size={13} style={{ color: "#000" }} />}
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Панель: Управление клубом (только для админа) ── */}
+      {panel === "manage" && user.isAdmin && (
+        <div className="absolute inset-0 z-50 flex flex-col animate-fade-in"
+          style={{ background: "var(--bg-dark)" }}>
+          <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: "1px solid rgba(0,255,179,0.1)" }}>
+            <button onClick={() => setPanel(null)}><Icon name="ChevronLeft" size={22} style={{ color: "rgba(255,255,255,0.6)" }} /></button>
+            <h3 className="font-bold text-lg text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Управление клубом</h3>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+
+            {/* Создать групповой чат */}
+            <div className="glass-card rounded-xl p-4" style={{ border: "1px solid rgba(0,255,179,0.12)" }}>
+              <div className="font-semibold text-white mb-3 text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>Создать групповой чат</div>
+              <div className="flex gap-2 mb-2">
+                <input value={newChatEmoji} onChange={e => setNewChatEmoji(e.target.value)}
+                  className="w-12 rounded-xl px-2 py-2.5 text-center text-lg outline-none"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }} maxLength={2} />
+                <input value={newChatName} onChange={e => setNewChatName(e.target.value)}
+                  placeholder="Название чата"
+                  className="flex-1 rounded-xl px-3 py-2.5 text-sm text-white outline-none"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }} />
+              </div>
+              {chatCreated && (
+                <div className="text-xs mb-2 px-3 py-2 rounded-lg" style={{ background: "rgba(0,255,179,0.1)", color: "var(--neon-green)", border: "1px solid rgba(0,255,179,0.2)" }}>
+                  Чат создан! Он появится в разделе «Чаты».
+                </div>
+              )}
+              <button onClick={createGroupChat} disabled={creatingChat || !newChatName.trim()}
+                className="neon-btn-filled w-full rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
+                style={{ fontFamily: '"Exo 2", sans-serif', opacity: creatingChat ? 0.7 : 1 }}>
+                {creatingChat ? <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} /> : <Icon name="Plus" size={15} />}
+                Создать чат
+              </button>
+            </div>
+
+            {/* Список участников */}
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-wider mb-2 px-1"
+                style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>Участники клуба</div>
+              {manageLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} />
+                </div>
+              ) : manageMembers.map(m => (
+                <div key={m.id} className="flex items-center gap-3 py-2.5 px-1">
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white overflow-hidden flex-shrink-0"
+                    style={{ background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "1px solid rgba(0,255,179,0.2)" }}>
+                    {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" /> : m.nickname[0].toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{m.nickname}</div>
+                    <div className="text-xs truncate" style={{ color: "rgba(255,255,255,0.4)" }}>{m.car || m.role}</div>
+                  </div>
+                  {m.isAdmin && <span className="text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "rgba(0,255,179,0.1)", color: "var(--neon-green)", border: "1px solid rgba(0,255,179,0.2)" }}>Адм</span>}
+                  <NeonBadge label={m.level} color={m.levelColor} />
+                </div>
+              ))}
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1189,7 +1501,7 @@ export default function Index() {
 
             {/* Content */}
             <div className="flex-1 overflow-hidden">
-              {tab === "chats" && <ChatsScreen />}
+              {tab === "chats" && <ChatsScreen user={session.user} sessionId={session.session_id} />}
               {tab === "events" && <EventsScreen />}
               {tab === "gallery" && <GalleryScreen />}
               {tab === "members" && <MembersScreen />}
