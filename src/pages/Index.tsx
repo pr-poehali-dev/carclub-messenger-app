@@ -214,6 +214,7 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   }, []);
 
   const playNotification = () => {
+    if (localStorage.getItem("msg_sound") === "off") return;
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -1373,7 +1374,7 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
 }) {
   const [notif, setNotif] = useState(true);
   const [online, setOnline] = useState(true);
-  const [sound, setSound] = useState(false);
+  const [sound, setSound] = useState(() => localStorage.getItem("msg_sound") !== "off");
   const [uploading, setUploading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [panel, setPanel] = useState<"rules" | "rating" | "manage" | "invite" | null>(null);
@@ -1628,7 +1629,7 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
   const privacyItems = [
     { icon: "Bell", label: "Уведомления", toggle: true, val: notif, onToggle: () => setNotif(v => !v) },
     { icon: "Eye", label: "Показывать онлайн", toggle: true, val: online, onToggle: () => setOnline(v => !v) },
-    { icon: "Volume2", label: "Звуки сообщений", toggle: true, val: sound, onToggle: () => setSound(v => !v) },
+    { icon: "Volume2", label: "Звуки сообщений", toggle: true, val: sound, onToggle: () => setSound(v => { const next = !v; localStorage.setItem("msg_sound", next ? "on" : "off"); return next; }) },
   ];
 
   return (
