@@ -141,7 +141,7 @@ async function apiGetMessages(chatId: number, after = 0): Promise<Message[]> {
 }
 
 async function apiSendMessage(chatId: number, payload: {
-  text?: string; type?: string; media?: string; media_content_type?: string;
+  text?: string; type?: string; media?: string; media_content_type?: string; sender?: string;
 }): Promise<Message> {
   const res = await fetch(`${API}?action=messages`, {
     method: "POST",
@@ -269,13 +269,13 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
     const text = msgText.trim();
     setMsgText("");
     setShowEmoji(false);
-    await pushMessage({ id: Date.now(), text, time: now(), out: true, type: "text" }, { text, type: "text" });
+    await pushMessage({ id: Date.now(), text, time: now(), out: true, type: "text", sender: user.nickname }, { text, type: "text", sender: user.nickname });
   };
 
   const sendEmoji = async (emoji: string) => {
     if (!activeChat || sending) return;
     setShowEmoji(false);
-    await pushMessage({ id: Date.now(), text: emoji, time: now(), out: true, type: "emoji" }, { text: emoji, type: "emoji" });
+    await pushMessage({ id: Date.now(), text: emoji, time: now(), out: true, type: "emoji", sender: user.nickname }, { text: emoji, type: "emoji", sender: user.nickname });
   };
 
   const sendImage = async (file: File) => {
@@ -283,8 +283,8 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
     const reader = new FileReader();
     reader.onload = async () => {
       const base64 = (reader.result as string).split(",")[1];
-      const optimistic: Message = { id: Date.now(), text: "📷 Фото", time: now(), out: true, type: "image", mediaUrl: URL.createObjectURL(file) };
-      await pushMessage(optimistic, { type: "image", media: base64, media_content_type: file.type });
+      const optimistic: Message = { id: Date.now(), text: "📷 Фото", time: now(), out: true, type: "image", mediaUrl: URL.createObjectURL(file), sender: user.nickname };
+      await pushMessage(optimistic, { type: "image", media: base64, media_content_type: file.type, sender: user.nickname });
     };
     reader.readAsDataURL(file);
   };
@@ -302,8 +302,8 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
         reader.onload = async () => {
           const base64 = (reader.result as string).split(",")[1];
           const url = URL.createObjectURL(blob);
-          const optimistic: Message = { id: Date.now(), text: "🎤 Голосовое", time: now(), out: true, type: "voice", mediaUrl: url };
-          await pushMessage(optimistic, { type: "voice", media: base64, media_content_type: "audio/webm" });
+          const optimistic: Message = { id: Date.now(), text: "🎤 Голосовое", time: now(), out: true, type: "voice", mediaUrl: url, sender: user.nickname };
+          await pushMessage(optimistic, { type: "voice", media: base64, media_content_type: "audio/webm", sender: user.nickname });
         };
         reader.readAsDataURL(blob);
       };

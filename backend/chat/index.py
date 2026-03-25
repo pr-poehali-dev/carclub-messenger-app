@@ -126,6 +126,7 @@ def handler(event: dict, context) -> dict:
         chat_id = body.get("chat_id")
         msg_type = body.get("type", "text")
         text = (body.get("text") or "").strip()
+        sender = (body.get("sender") or "").strip() or "me"
         media_data = body.get("media")      # base64
         media_content_type = body.get("media_content_type", "image/jpeg")
 
@@ -153,9 +154,9 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
         cur.execute(f"""
             INSERT INTO {SCHEMA}.messages (chat_id, text, sender, is_out, type, media_url)
-            VALUES (%s, %s, 'me', true, %s, %s)
+            VALUES (%s, %s, %s, true, %s, %s)
             RETURNING id, text, sender, is_out, created_at, type, media_url
-        """, (int(chat_id), text, msg_type, media_url))
+        """, (int(chat_id), text, sender, msg_type, media_url))
         r = cur.fetchone()
         conn.commit()
         cur.close()
