@@ -851,6 +851,9 @@ function GalleryScreen({ user, sessionId }: { user: User; sessionId: string }) {
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null);
+  const [pendingTitle, setPendingTitle] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -868,16 +871,28 @@ function GalleryScreen({ user, sessionId }: { user: User; sessionId: string }) {
     if (Array.isArray(d)) setItems(d);
   };
 
-  const handleUpload = async (file: File) => {
-    if (!openFolder) return;
+  const pickFile = (file: File) => {
+    const preview = URL.createObjectURL(file);
+    setPendingFile(file);
+    setPendingPreview(preview);
+    setPendingTitle(file.name.replace(/\.[^.]+$/, ""));
+  };
+
+  const confirmUpload = async () => {
+    if (!openFolder || !pendingFile) return;
     setUploading(true);
+    const file = pendingFile;
+    const title = pendingTitle.trim() || file.name.replace(/\.[^.]+$/, "");
+    setPendingFile(null);
+    setPendingPreview(null);
+    setPendingTitle("");
     const reader = new FileReader();
     reader.onload = async () => {
       const base64 = (reader.result as string).split(",")[1];
       const res = await fetch(`${GALLERY_API}?action=upload`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
-        body: JSON.stringify({ folder_id: openFolder.id, file: base64, content_type: file.type, title: file.name.replace(/\.[^.]+$/, "") }),
+        body: JSON.stringify({ folder_id: openFolder.id, file: base64, content_type: file.type, title }),
       });
       const d = await res.json();
       if (res.ok) {
@@ -957,7 +972,60 @@ function GalleryScreen({ user, sessionId }: { user: User; sessionId: string }) {
           Загрузить
         </button>
         <input ref={fileInputRef} type="file" accept="image/*,video/*" className="hidden"
-          onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(f); e.target.value = ""; }} />
+          onChange={e => { const f = e.target.files?.[0]; if (f) pickFile(f); e.target.value = ""; }} />
+
+        {/* Модал подписи перед загрузкой */}
+        {pendingFile && pendingPreview && (
+          <div className="absolute inset-0 z-50 flex items-end justify-center"
+            style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(6px)" }}
+            onClick={e => { if (e.target === e.currentTarget) { setPendingFile(null); setPendingPreview(null); } }}>
+            <div className="w-full max-w-sm rounded-t-3xl p-5 animate-fade-in"
+              style={{ background: "var(--bg-dark)", border: "1px solid rgba(0,255,179,0.15)", borderBottom: "none" }}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-base text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Добавить подпись</h3>
+                <button onClick={() => { setPendingFile(null); setPendingPreview(null); }}>
+                  <Icon name="X" size={20} style={{ color: "rgba(255,255,255,0.4)" }} />
+                </button>
+              </div>
+
+              {/* Превью */}
+              <div className="rounded-xl overflow-hidden mb-4" style={{ maxHeight: 220 }}>
+                {pendingFile.type.startsWith("video") ? (
+                  <video src={pendingPreview} className="w-full object-cover rounded-xl" style={{ maxHeight: 220 }} />
+                ) : (
+                  <img src={pendingPreview} alt="preview" className="w-full object-cover rounded-xl" style={{ maxHeight: 220 }} />
+                )}
+              </div>
+
+              {/* Поле подписи */}
+              <div className="mb-4">
+                <label className="text-xs mb-1.5 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.45)" }}>
+                  Подпись (необязательно)
+                </label>
+                <input value={pendingTitle} onChange={e => setPendingTitle(e.target.value)}
+                  placeholder="Например: Moscow Raceway, закат..."
+                  className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }}
+                  onKeyDown={e => e.key === "Enter" && confirmUpload()}
+                  autoFocus />
+              </div>
+
+              <div className="flex gap-2">
+                <button onClick={() => { setPendingFile(null); setPendingPreview(null); }}
+                  className="flex-1 rounded-xl py-3 text-sm font-semibold"
+                  style={{ fontFamily: '"Exo 2", sans-serif', background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.5)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                  Отмена
+                </button>
+                <button onClick={confirmUpload}
+                  className="flex-1 neon-btn-filled rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2"
+                  style={{ fontFamily: '"Exo 2", sans-serif' }}>
+                  <Icon name="Upload" size={15} />
+                  Загрузить
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="flex gap-2 px-4 py-2 flex-shrink-0">
@@ -990,12 +1058,17 @@ function GalleryScreen({ user, sessionId }: { user: User; sessionId: string }) {
                   <img src={item.thumbnailUrl || item.url} alt={item.title} className="w-full h-full object-cover" />
                 )}
                 {item.type === "video" && (
-                  <div className="absolute top-1 left-1 rounded px-1 py-0.5"
+                  <div className="absolute top-1.5 left-1.5 rounded-md px-1.5 py-0.5"
                     style={{ background: "rgba(0,0,0,0.7)", fontSize: "9px", color: "#fff" }}>▶ Видео</div>
                 )}
-                <div className="absolute bottom-1 right-1 flex items-center gap-0.5 rounded px-1 py-0.5"
-                  style={{ background: "rgba(0,0,0,0.6)", fontSize: "9px", color: "#fff" }}>
-                  ❤ {item.likes}
+                <div className="absolute inset-x-0 bottom-0 px-2 pt-4 pb-1.5"
+                  style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75), transparent)" }}>
+                  {item.title && (
+                    <p className="text-white truncate mb-0.5" style={{ fontSize: "10px", fontWeight: 600 }}>{item.title}</p>
+                  )}
+                  <div className="flex items-center gap-0.5" style={{ fontSize: "9px", color: "rgba(255,255,255,0.7)" }}>
+                    ❤ {item.likes}
+                  </div>
                 </div>
               </button>
             ))}
