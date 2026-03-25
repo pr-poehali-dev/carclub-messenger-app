@@ -155,6 +155,15 @@ async function apiSendMessage(chatId: number, payload: {
   return res.json();
 }
 
+async function apiCreateChat(name: string, avatar: string, isGroup = false, memberIds: number[] = []): Promise<{ id: number }> {
+  const res = await fetch(`${API}?action=create_chat`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, avatar, is_group: isGroup, member_ids: memberIds }),
+  });
+  return res.json();
+}
+
 // ─── COMPONENTS ──────────────────────────────────────────────────────────────
 function Avatar({ char, size = "md", online }: { char: string; size?: "sm" | "md" | "lg"; online?: boolean }) {
   const sizes = { sm: "w-9 h-9 text-sm", md: "w-11 h-11 text-base", lg: "w-16 h-16 text-2xl" };
@@ -430,9 +439,11 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
     setNewChatOpen(false);
     const existing = chatList.find(c => !c.isGroup && c.name === member.nickname);
     if (existing) { openChat(existing); return; }
+    const avatarChar = member.avatarUrl ? member.avatarUrl : member.nickname[0].toUpperCase();
+    const created = await apiCreateChat(member.nickname, avatarChar, false, member.id ? [member.id] : []);
     const newChat: Chat = {
-      id: Date.now(), name: member.nickname,
-      avatar: member.avatarUrl ? member.avatarUrl : member.nickname[0].toUpperCase(),
+      id: created.id, name: member.nickname,
+      avatar: avatarChar,
       lastMsg: "", time: "", unread: 0, online: false, isGroup: false, messages: [],
     };
     setChatList(prev => [newChat, ...prev]);

@@ -166,4 +166,45 @@ def handler(event: dict, context) -> dict:
                "type": r[5], "mediaUrl": r[6]}
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(msg, ensure_ascii=False)}
 
+    # POST ?action=create_chat — создать личный чат с пользователем
+    if method == "POST" and action == "create_chat":
+        body = json.loads(event.get("body") or "{}")
+        name = (body.get("name") or "").strip()
+        avatar = (body.get("avatar") or name[:1].upper() if name else "?")
+        is_group = bool(body.get("is_group", False))
+        member_ids = body.get("member_ids", [])
+
+        if not name:
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "name required"})}
+
+        conn = get_conn()
+        cur = conn.cursor()
+
+        # Для личного чата — ищем существующий по имени и is_group=false
+        if not is_group:
+            cur.execute(f"""
+                SELECT id FROM {SCHEMA}.chats WHERE name = %s AND is_group = false LIMIT 1
+            """, (name,))
+            existing = cur.fetchone()
+            if existing:
+                cur.close()
+                conn.close()
+                return {"statusCode": 200, "headers": CORS, "body": json.dumps({"id": existing[0], "existed": True})}
+
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.chats (name, avatar, is_group, is_private)
+            VALUES (%s, %s, %s, false) RETURNING id
+        """, (name, avatar, is_group))
+        new_id = cur.fetchone()[0]
+
+        for uid in member_ids:
+            cur.execute(f"""
+                INSERT INTO {SCHEMA}.chat_members (chat_id, user_id) VALUES (%s, %s) ON CONFLICT DO NOTHING
+            """, (new_id, int(uid)))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"id": new_id, "existed": False})}
+
     return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
