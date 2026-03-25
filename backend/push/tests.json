@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "GET vapid_key",
+      "method": "GET",
+      "path": "/?action=vapid_key",
+      "expectedStatus": 200,
+      "expectedBody": {"public_key": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
