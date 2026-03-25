@@ -80,13 +80,7 @@ const gallery: GalleryItem[] = [
   { id: 6, emoji: "🛞", title: "Смена резины", event: "Встреча", likes: 38, bg: "from-slate-900/40 to-gray-900/40" },
 ];
 
-const members: Member[] = [
-  { id: 1, name: "Александр Громов", car: "BMW M3 G80", avatar: "А", level: "Легенда", levelColor: "#ff6b00", points: 9850, online: true, role: "Президент клуба" },
-  { id: 2, name: "Максим Рублёв", car: "Nissan GT-R R35", avatar: "М", level: "Эксперт", levelColor: "#bf00ff", points: 7420, online: true, role: "Капитан дрифт-команды" },
-  { id: 3, name: "Анна Соколова", car: "Porsche 911 GT3", avatar: "А", level: "Профи", levelColor: "#00d4ff", points: 5130, online: false, role: "Организатор событий" },
-  { id: 4, name: "Дмитрий Орлов", car: "Mercedes AMG GT", avatar: "Д", level: "Профи", levelColor: "#00d4ff", points: 4890, online: false, role: "Механик" },
-  { id: 5, name: "Кирилл Зайцев", car: "Toyota Supra A90", avatar: "К", level: "Новичок", levelColor: "#00ffb3", points: 1240, online: true, role: "Участник" },
-];
+
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 const API = "https://functions.poehali.dev/7f1b68b2-3be2-4063-bc44-6fdd024576b1";
@@ -1142,8 +1136,19 @@ function GalleryScreen({ user, sessionId }: { user: User; sessionId: string }) {
 
 // ─── MEMBERS SCREEN ───────────────────────────────────────────────────────────
 function MembersScreen() {
-  const [selected, setSelected] = useState<Member | null>(null);
-  const maxPoints = members[0].points;
+  const [membersList, setMembersList] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<User | null>(null);
+
+  useEffect(() => {
+    fetch(`${ADMIN_API}?action=members`)
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setMembersList(d); })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const maxPoints = membersList.length > 0 ? Math.max(...membersList.map(m => m.points)) : 1;
+  const top = membersList[0];
 
   if (selected) {
     return (
@@ -1154,21 +1159,22 @@ function MembersScreen() {
           </button>
           <span className="font-semibold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Профиль</span>
         </div>
-
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <div className="flex flex-col items-center text-center mb-6">
             <div className="relative mb-4">
-              <div className="w-24 h-24 rounded-full flex items-center justify-center font-bold text-3xl text-white"
+              <div className="w-24 h-24 rounded-full flex items-center justify-center font-bold text-3xl text-white overflow-hidden"
                 style={{ fontFamily: '"Exo 2", sans-serif', background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "2px solid rgba(0,255,179,0.35)", boxShadow: "0 0 30px rgba(0,255,179,0.2)" }}>
-                {selected.avatar}
+                {selected.avatarUrl
+                  ? <img src={selected.avatarUrl} alt="" className="w-full h-full object-cover" />
+                  : selected.nickname[0].toUpperCase()}
               </div>
-              {selected.online && (
-                <span className="absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full border-2"
-                  style={{ background: "var(--neon-green)", boxShadow: "0 0 6px var(--neon-green)", borderColor: "var(--bg-dark)" }} />
-              )}
             </div>
-            <h3 className="font-bold text-white text-xl" style={{ fontFamily: '"Exo 2", sans-serif' }}>{selected.name}</h3>
-            <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.5)" }}>{selected.role}</p>
+            <h3 className="font-bold text-white text-xl" style={{ fontFamily: '"Exo 2", sans-serif' }}>{selected.nickname}</h3>
+            <p className="text-sm mt-1 flex items-center gap-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>
+              {selected.isFounder && <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: "rgba(255,107,0,0.15)", color: "#ff6b00", border: "1px solid rgba(255,107,0,0.3)" }}>Основатель</span>}
+              {!selected.isFounder && selected.isAdmin && <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ background: "rgba(0,255,179,0.1)", color: "var(--neon-green)", border: "1px solid rgba(0,255,179,0.2)" }}>Админ</span>}
+              {selected.role}
+            </p>
             <div className="mt-2"><NeonBadge label={selected.level} color={selected.levelColor} /></div>
           </div>
 
@@ -1183,26 +1189,15 @@ function MembersScreen() {
             </div>
           </div>
 
-          <div className="glass-card rounded-xl p-4 mb-4">
-            <div className="text-xs mb-3 font-semibold uppercase tracking-wider" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>Автомобиль</div>
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🚗</span>
-              <span className="font-semibold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>{selected.car}</span>
+          {selected.car && (
+            <div className="glass-card rounded-xl p-4 mb-4">
+              <div className="text-xs mb-3 font-semibold uppercase tracking-wider" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>Автомобиль</div>
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🚗</span>
+                <span className="font-semibold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>{selected.car}</span>
+              </div>
             </div>
-          </div>
-
-          <div className="flex gap-3">
-            <button className="neon-btn-filled flex-1 rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2"
-              style={{ fontFamily: '"Exo 2", sans-serif' }}>
-              <Icon name="MessageCircle" size={16} />
-              Написать
-            </button>
-            <button className="flex-1 rounded-xl py-3 text-sm flex items-center justify-center gap-2"
-              style={{ border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)" }}>
-              <Icon name="UserPlus" size={16} />
-              Добавить
-            </button>
-          </div>
+          )}
         </div>
       </div>
     );
@@ -1212,37 +1207,56 @@ function MembersScreen() {
     <div className="flex flex-col h-full animate-fade-in">
       <div className="px-4 pt-4 pb-3">
         <h2 className="font-bold text-xl text-white mb-1" style={{ fontFamily: '"Exo 2", sans-serif' }}>Участники</h2>
-        <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{members.length} членов клуба</p>
+        <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{membersList.length} членов клуба</p>
       </div>
 
-      <div className="px-4 mb-3">
-        <div className="glass-card rounded-xl p-3 text-center" style={{ border: "1px solid rgba(0,255,179,0.15)" }}>
-          <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>🏆 Топ недели</div>
-          <div className="flex items-center justify-center gap-3">
-            <span className="text-2xl">👑</span>
-            <div className="text-left">
-              <div className="font-bold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>{members[0].name}</div>
-              <div className="text-xs" style={{ color: "var(--neon-green)" }}>{members[0].points.toLocaleString()} очков</div>
+      {top && (
+        <div className="px-4 mb-3">
+          <div className="glass-card rounded-xl p-3 text-center" style={{ border: "1px solid rgba(0,255,179,0.15)" }}>
+            <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>🏆 Топ клуба</div>
+            <div className="flex items-center justify-center gap-3">
+              <span className="text-2xl">👑</span>
+              <div className="text-left">
+                <div className="font-bold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>{top.nickname}</div>
+                <div className="text-xs" style={{ color: "var(--neon-green)" }}>{top.points.toLocaleString()} очков</div>
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-4">
-        {[...members].sort((a, b) => b.points - a.points).map((m, i) => (
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-6 h-6 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} />
+          </div>
+        ) : membersList.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-40 gap-2">
+            <Icon name="Users" size={40} style={{ color: "rgba(255,255,255,0.15)" }} />
+            <p className="text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>Участников пока нет</p>
+          </div>
+        ) : membersList.map((m, i) => (
           <button key={m.id} onClick={() => setSelected(m)}
             className="w-full glass-card rounded-xl p-3 flex items-center gap-3 card-hover text-left animate-fade-in"
             style={{ animationDelay: `${i * 0.06}s` }}>
-            <span className="font-bold text-lg w-6 text-center flex-shrink-0" style={{ fontFamily: '"Exo 2", sans-serif', color: i === 0 ? "#ffd700" : i === 1 ? "#c0c0c0" : i === 2 ? "#cd7f32" : "rgba(255,255,255,0.3)" }}>
+            <span className="font-bold text-lg w-6 text-center flex-shrink-0"
+              style={{ fontFamily: '"Exo 2", sans-serif', color: i === 0 ? "#ffd700" : i === 1 ? "#c0c0c0" : i === 2 ? "#cd7f32" : "rgba(255,255,255,0.3)" }}>
               {i + 1}
             </span>
-            <Avatar char={m.avatar} online={m.online} />
+            <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white overflow-hidden flex-shrink-0"
+              style={{ background: "linear-gradient(135deg, rgba(0,255,179,0.15), rgba(0,212,255,0.1))", border: "1px solid rgba(0,255,179,0.25)" }}>
+              {m.avatarUrl
+                ? <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" />
+                : m.nickname[0].toUpperCase()}
+            </div>
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>{m.name}</span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-semibold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{m.nickname}</span>
+                {m.isFounder && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: "rgba(255,107,0,0.15)", color: "#ff6b00", fontSize: "10px" }}>Осн.</span>}
+                {!m.isFounder && m.isAdmin && <span className="text-xs px-1.5 py-0.5 rounded-full" style={{ background: "rgba(0,255,179,0.1)", color: "var(--neon-green)", fontSize: "10px" }}>Адм</span>}
                 <NeonBadge label={m.level} color={m.levelColor} />
               </div>
-              <div className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{m.car}</div>
+              <div className="text-xs mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.4)" }}>{m.car || m.role}</div>
             </div>
             <div className="text-right flex-shrink-0">
               <div className="font-bold text-sm" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-green)" }}>{m.points.toLocaleString()}</div>
@@ -1262,10 +1276,9 @@ function SearchScreen() {
   const filtered = query.length > 1 ? {
     chats: chats.filter(c => c.name.toLowerCase().includes(query.toLowerCase())),
     events: events.filter(e => e.title.toLowerCase().includes(query.toLowerCase())),
-    members: members.filter(m => m.name.toLowerCase().includes(query.toLowerCase())),
   } : null;
 
-  const hasResults = filtered && (filtered.chats.length + filtered.events.length + filtered.members.length > 0);
+  const hasResults = filtered && (filtered.chats.length + filtered.events.length > 0);
 
   return (
     <div className="flex flex-col h-full animate-fade-in">
@@ -1322,21 +1335,7 @@ function SearchScreen() {
                 ))}
               </div>
             )}
-            {filtered.members.length > 0 && (
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-purple)" }}>Участники</div>
-                {filtered.members.map(m => (
-                  <div key={m.id} className="glass-card rounded-lg p-3 mb-2 flex items-center gap-3">
-                    <Avatar char={m.avatar} size="sm" online={m.online} />
-                    <div className="flex-1">
-                      <div className="font-semibold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>{m.name}</div>
-                      <div className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{m.car}</div>
-                    </div>
-                    <NeonBadge label={m.level} color={m.levelColor} />
-                  </div>
-                ))}
-              </div>
-            )}
+
           </div>
         )}
       </div>
