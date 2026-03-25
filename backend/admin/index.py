@@ -177,5 +177,69 @@ def handler(event: dict, context) -> dict:
             return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Пользователь не найден"})}
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"id": row[0], "nickname": row[1], "isAdmin": row[2]})}
 
+    # ── GET ?action=chat_members&chat_id=X — участники закрытого чата (публично)
+    if method == "GET" and action == "chat_members":
+        chat_id = params.get("chat_id")
+        if not chat_id:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id required"})}
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT u.id, u.nickname, u.car, u.role, u.level, u.level_color, u.avatar_url, u.is_admin
+            FROM {SCHEMA}.chat_members cm
+            JOIN {SCHEMA}.users u ON u.id = cm.user_id
+            WHERE cm.chat_id = %s
+            ORDER BY u.nickname
+        """, (int(chat_id),))
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps([
+            {"id": r[0], "nickname": r[1], "car": r[2], "role": r[3],
+             "level": r[4], "levelColor": r[5], "avatarUrl": r[6], "isAdmin": bool(r[7])}
+            for r in rows
+        ], ensure_ascii=False)}
+
+    # ── POST ?action=add_member — добавить участника в закрытый чат
+    if method == "POST" and action == "add_member":
+        body = json.loads(event.get("body") or "{}")
+        chat_id = body.get("chat_id")
+        target_id = body.get("user_id")
+        if not chat_id or not target_id:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id и user_id обязательны"})}
+        cur = conn.cursor()
+        cur.execute(f"SELECT is_private FROM {SCHEMA}.chats WHERE id = %s", (int(chat_id),))
+        row = cur.fetchone()
+        if not row or not row[0]:
+            cur.close()
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Чат не является закрытым"})}
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.chat_members (chat_id, user_id)
+            VALUES (%s, %s) ON CONFLICT DO NOTHING
+        """, (int(chat_id), int(target_id)))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
+    # ── POST ?action=remove_member — удалить участника из закрытого чата
+    if method == "POST" and action == "remove_member":
+        body = json.loads(event.get("body") or "{}")
+        chat_id = body.get("chat_id")
+        target_id = body.get("user_id")
+        if not chat_id or not target_id:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id и user_id обязательны"})}
+        cur = conn.cursor()
+        cur.execute(f"""
+            DELETE FROM {SCHEMA}.chat_members WHERE chat_id = %s AND user_id = %s
+        """, (int(chat_id), int(target_id)))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
     conn.close()
     return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}

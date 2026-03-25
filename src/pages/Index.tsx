@@ -225,6 +225,11 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   const [newChatOpen, setNewChatOpen] = useState(false);
   const [membersList, setMembersList] = useState<User[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
+  const [chatMembersOpen, setChatMembersOpen] = useState(false);
+  const [chatMembers, setChatMembers] = useState<User[]>([]);
+  const [chatMembersLoading, setChatMembersLoading] = useState(false);
+  const [allMembers, setAllMembers] = useState<User[]>([]);
+  const [memberSaving, setMemberSaving] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastIdRef = useRef(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -303,6 +308,44 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
     if (Array.isArray(data)) setMembersList(data.filter((m: User) => m.id !== user.id));
   };
 
+  const openChatMembers = async (chat: Chat) => {
+    setChatMembersOpen(true);
+    setChatMembersLoading(true);
+    const [membersRes, allRes] = await Promise.all([
+      fetch(`${ADMIN_API}?action=chat_members&chat_id=${chat.id}`),
+      fetch(`${ADMIN_API}?action=members`),
+    ]);
+    const [members, all] = await Promise.all([membersRes.json(), allRes.json()]);
+    if (Array.isArray(members)) setChatMembers(members);
+    if (Array.isArray(all)) setAllMembers(all);
+    setChatMembersLoading(false);
+  };
+
+  const addMember = async (chatId: number, userId: number) => {
+    setMemberSaving(userId);
+    await fetch(`${ADMIN_API}?action=add_member`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+      body: JSON.stringify({ chat_id: chatId, user_id: userId }),
+    });
+    setChatMembers(prev => {
+      const member = allMembers.find(m => m.id === userId);
+      return member && !prev.find(m => m.id === userId) ? [...prev, member] : prev;
+    });
+    setMemberSaving(null);
+  };
+
+  const removeMember = async (chatId: number, userId: number) => {
+    setMemberSaving(userId);
+    await fetch(`${ADMIN_API}?action=remove_member`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+      body: JSON.stringify({ chat_id: chatId, user_id: userId }),
+    });
+    setChatMembers(prev => prev.filter(m => m.id !== userId));
+    setMemberSaving(null);
+  };
+
   const startChat = async (member: User) => {
     setNewChatOpen(false);
     const existing = chatList.find(c => !c.isGroup && c.name === member.nickname);
@@ -319,19 +362,120 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   if (activeChat) {
     return (
       <div className="flex flex-col h-full animate-fade-in">
+        {/* Панель участников закрытого чата */}
+        {chatMembersOpen && (
+          <div className="absolute inset-0 z-50 flex flex-col animate-fade-in"
+            style={{ background: "var(--bg-dark)" }}>
+            <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: "1px solid rgba(0,255,179,0.1)" }}>
+              <button onClick={() => setChatMembersOpen(false)}>
+                <Icon name="ChevronLeft" size={22} style={{ color: "rgba(255,255,255,0.6)" }} />
+              </button>
+              <div className="flex-1">
+                <h3 className="font-bold text-white text-base" style={{ fontFamily: '"Exo 2", sans-serif' }}>Участники чата</h3>
+                <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{activeChat.name}</p>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {chatMembersLoading ? (
+                <div className="flex justify-center py-10">
+                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} />
+                </div>
+              ) : (
+                <>
+                  {/* Текущие участники */}
+                  <div className="text-xs font-semibold uppercase tracking-wider mb-2 px-1"
+                    style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>
+                    В чате ({chatMembers.length})
+                  </div>
+                  <div className="space-y-1 mb-5">
+                    {chatMembers.map(m => (
+                      <div key={m.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                        style={{ background: "rgba(0,255,179,0.04)", border: "1px solid rgba(0,255,179,0.08)" }}>
+                        <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white overflow-hidden flex-shrink-0"
+                          style={{ background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "1px solid rgba(0,255,179,0.2)" }}>
+                          {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" /> : m.nickname[0].toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{m.nickname}</div>
+                          <div className="text-xs truncate" style={{ color: "rgba(255,255,255,0.4)" }}>{m.car || m.role}</div>
+                        </div>
+                        {user.isAdmin && m.id !== user.id && (
+                          <button onClick={() => removeMember(activeChat.id, m.id)}
+                            disabled={memberSaving === m.id}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all"
+                            style={{ background: "rgba(255,77,77,0.1)", border: "1px solid rgba(255,77,77,0.25)" }}>
+                            {memberSaving === m.id
+                              ? <div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: "rgba(255,77,77,0.3)", borderTopColor: "#ff4d4d" }} />
+                              : <Icon name="UserMinus" size={13} style={{ color: "#ff6b6b" }} />}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Добавить участника (только для админа) */}
+                  {user.isAdmin && (() => {
+                    const memberIds = new Set(chatMembers.map(m => m.id));
+                    const notInChat = allMembers.filter(m => !memberIds.has(m.id));
+                    return notInChat.length > 0 ? (
+                      <>
+                        <div className="text-xs font-semibold uppercase tracking-wider mb-2 px-1"
+                          style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>
+                          Добавить участника
+                        </div>
+                        <div className="space-y-1">
+                          {notInChat.map(m => (
+                            <div key={m.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                              <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white overflow-hidden flex-shrink-0"
+                                style={{ background: "linear-gradient(135deg, rgba(0,255,179,0.15), rgba(0,212,255,0.1))", border: "1px solid rgba(255,255,255,0.1)" }}>
+                                {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" /> : m.nickname[0].toUpperCase()}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-semibold text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.7)" }}>{m.nickname}</div>
+                                <div className="text-xs truncate" style={{ color: "rgba(255,255,255,0.35)" }}>{m.car || m.role}</div>
+                              </div>
+                              <button onClick={() => addMember(activeChat.id, m.id)}
+                                disabled={memberSaving === m.id}
+                                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                                style={{ background: "rgba(0,255,179,0.1)", border: "1px solid rgba(0,255,179,0.25)" }}>
+                                {memberSaving === m.id
+                                  ? <div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} />
+                                  : <Icon name="UserPlus" size={13} style={{ color: "var(--neon-green)" }} />}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : null;
+                  })()}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid rgba(0,255,179,0.12)" }}>
           <button onClick={closeChat} className="transition-colors" style={{ color: "rgba(255,255,255,0.5)" }}>
             <Icon name="ChevronLeft" size={22} />
           </button>
           <Avatar char={activeChat.avatar} online={activeChat.online} />
           <div className="flex-1 min-w-0">
-            <div className="font-semibold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{activeChat.name}</div>
-            <div className="text-xs" style={{ color: "var(--neon-green)" }}>онлайн</div>
+            <div className="font-semibold text-white text-sm truncate flex items-center gap-1" style={{ fontFamily: '"Exo 2", sans-serif' }}>
+              {activeChat.isPrivate && <Icon name="Lock" size={11} style={{ color: "rgba(0,255,179,0.6)" }} />}
+              {activeChat.name}
+            </div>
+            <div className="text-xs" style={{ color: "var(--neon-green)" }}>
+              {activeChat.isPrivate ? "закрытый чат" : "онлайн"}
+            </div>
           </div>
-          <button className="transition-colors" style={{ color: "rgba(255,255,255,0.5)" }}>
-            <Icon name="Phone" size={18} />
-          </button>
-          <button className="transition-colors ml-2" style={{ color: "rgba(255,255,255,0.5)" }}>
+          {activeChat.isPrivate && (
+            <button onClick={() => openChatMembers(activeChat)} className="transition-colors"
+              style={{ color: "rgba(255,255,255,0.5)" }}>
+              <Icon name="Users" size={18} />
+            </button>
+          )}
+          <button className="transition-colors ml-1" style={{ color: "rgba(255,255,255,0.5)" }}>
             <Icon name="MoreVertical" size={18} />
           </button>
         </div>
