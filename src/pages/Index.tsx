@@ -155,10 +155,10 @@ async function apiSendMessage(chatId: number, payload: {
   return res.json();
 }
 
-async function apiCreateChat(name: string, avatar: string, isGroup = false, memberIds: number[] = []): Promise<{ id: number }> {
+async function apiCreateChat(name: string, avatar: string, isGroup = false, memberIds: number[] = [], sessionId = ""): Promise<{ id: number }> {
   const res = await fetch(`${API}?action=create_chat`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
     body: JSON.stringify({ name, avatar, is_group: isGroup, member_ids: memberIds }),
   });
   return res.json();
@@ -437,10 +437,11 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
 
   const startChat = async (member: User) => {
     setNewChatOpen(false);
-    const existing = chatList.find(c => !c.isGroup && c.name === member.nickname);
-    if (existing) { openChat(existing); return; }
     const avatarChar = member.avatarUrl ? member.avatarUrl : member.nickname[0].toUpperCase();
-    const created = await apiCreateChat(member.nickname, avatarChar, false, member.id ? [member.id] : []);
+    const bothIds = [user.id, member.id].filter(Boolean) as number[];
+    const created = await apiCreateChat(member.nickname, avatarChar, false, bothIds, sessionId);
+    const existing = chatList.find(c => c.id === created.id);
+    if (existing) { openChat(existing); return; }
     const newChat: Chat = {
       id: created.id, name: member.nickname,
       avatar: avatarChar,
