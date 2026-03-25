@@ -118,27 +118,41 @@ def handler(event: dict, context) -> dict:
             return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Пользователь не найден"})}
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"id": row[0], "points": row[1]})}
 
-    # ── POST ?action=create_chat — создать групповой чат
+    # ── POST ?action=create_chat — создать групповой или закрытый чат
     if method == "POST" and action == "create_chat":
         body = json.loads(event.get("body") or "{}")
         name = (body.get("name") or "").strip()
         avatar = (body.get("avatar") or "💬").strip()
+        is_private = bool(body.get("is_private", False))
+        member_ids = body.get("member_ids", [])  # список user_id для закрытого чата
         if not name:
             conn.close()
             return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Название чата обязательно"})}
+        if is_private and not member_ids:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Выберите участников закрытого чата"})}
         cur = conn.cursor()
         cur.execute(f"""
-            INSERT INTO {SCHEMA}.chats (name, avatar, is_group)
-            VALUES (%s, %s, true)
-            RETURNING id, name, avatar, is_group
-        """, (name, avatar))
+            INSERT INTO {SCHEMA}.chats (name, avatar, is_group, is_private)
+            VALUES (%s, %s, true, %s)
+            RETURNING id, name, avatar, is_group, is_private
+        """, (name, avatar, is_private))
         row = cur.fetchone()
+        chat_id = row[0]
+        if is_private:
+            # добавляем всех выбранных участников + самого создателя
+            all_ids = list(set([user_id] + [int(i) for i in member_ids]))
+            for uid in all_ids:
+                cur.execute(f"""
+                    INSERT INTO {SCHEMA}.chat_members (chat_id, user_id)
+                    VALUES (%s, %s) ON CONFLICT DO NOTHING
+                """, (chat_id, uid))
         conn.commit()
         cur.close()
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({
             "id": row[0], "name": row[1], "avatar": row[2], "isGroup": row[3],
-            "lastMsg": "", "time": "", "unread": 0,
+            "isPrivate": row[4], "lastMsg": "", "time": "", "unread": 0,
         }, ensure_ascii=False)}
 
     # ── POST ?action=set_admin — назначить/снять администратора

@@ -25,6 +25,14 @@ def fmt_time(dt):
     return dt.strftime("%H:%M")
 
 
+def get_user_id_from_session(session_id: str, conn):
+    cur = conn.cursor()
+    cur.execute(f"SELECT user_id FROM t_p76085414_carclub_messenger_ap.sessions WHERE session_id = %s", (session_id,))
+    row = cur.fetchone()
+    cur.close()
+    return row[0] if row else None
+
+
 def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
@@ -32,13 +40,16 @@ def handler(event: dict, context) -> dict:
     method = event.get("httpMethod", "GET")
     params = event.get("queryStringParameters") or {}
     action = params.get("action", "chats")
+    headers = event.get("headers") or {}
+    session_id = headers.get("X-Session-Id") or headers.get("x-session-id") or ""
 
-    # GET ?action=chats — список всех чатов с последним сообщением
+    # GET ?action=chats — список чатов (закрытые только для участников)
     if method == "GET" and action == "chats":
         conn = get_conn()
+        user_id = get_user_id_from_session(session_id, conn) if session_id else None
         cur = conn.cursor()
         cur.execute(f"""
-            SELECT c.id, c.name, c.avatar, c.is_group,
+            SELECT c.id, c.name, c.avatar, c.is_group, c.is_private,
                    m.text AS last_msg, m.created_at AS last_time,
                    COUNT(m2.id) FILTER (WHERE m2.is_out = false) AS unread
             FROM {SCHEMA}.chats c
@@ -47,15 +58,20 @@ def handler(event: dict, context) -> dict:
                 WHERE chat_id = c.id ORDER BY created_at DESC LIMIT 1
             ) m ON true
             LEFT JOIN {SCHEMA}.messages m2 ON m2.chat_id = c.id
-            GROUP BY c.id, c.name, c.avatar, c.is_group, m.text, m.created_at
+            WHERE c.is_private = false
+               OR EXISTS (
+                   SELECT 1 FROM {SCHEMA}.chat_members cm
+                   WHERE cm.chat_id = c.id AND cm.user_id = %s
+               )
+            GROUP BY c.id, c.name, c.avatar, c.is_group, c.is_private, m.text, m.created_at
             ORDER BY m.created_at DESC NULLS LAST
-        """)
+        """, (user_id,))
         rows = cur.fetchall()
         cur.close()
         conn.close()
         chats = [
-            {"id": r[0], "name": r[1], "avatar": r[2], "isGroup": r[3],
-             "lastMsg": r[4] or "", "time": fmt_time(r[5]), "unread": int(r[6] or 0)}
+            {"id": r[0], "name": r[1], "avatar": r[2], "isGroup": r[3], "isPrivate": r[4],
+             "lastMsg": r[5] or "", "time": fmt_time(r[6]), "unread": int(r[7] or 0)}
             for r in rows
         ]
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(chats, ensure_ascii=False)}

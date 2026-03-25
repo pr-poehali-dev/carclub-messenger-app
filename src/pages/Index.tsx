@@ -20,6 +20,7 @@ interface Chat {
   unread: number;
   online: boolean;
   isGroup: boolean;
+  isPrivate?: boolean;
   messages: Message[];
 }
 
@@ -167,8 +168,10 @@ async function apiRegister(nickname: string, pin: string, car: string) {
   return { ok: res.ok, data: await res.json() };
 }
 
-async function apiGetChats(): Promise<Chat[]> {
-  const res = await fetch(`${API}?action=chats`);
+async function apiGetChats(sessionId?: string): Promise<Chat[]> {
+  const res = await fetch(`${API}?action=chats`, {
+    headers: sessionId ? { "X-Session-Id": sessionId } : {},
+  });
   return res.json();
 }
 
@@ -228,7 +231,7 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
 
   // Загружаем список чатов из API
   useEffect(() => {
-    apiGetChats().then(data => {
+    apiGetChats(sessionId).then(data => {
       if (Array.isArray(data) && data.length > 0) setChatList(data);
     }).catch(() => {});
   }, []);
@@ -432,7 +435,10 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
             <Avatar char={chat.avatar} online={chat.online} />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{chat.name}</span>
+                <span className="font-semibold text-white text-sm truncate flex items-center gap-1" style={{ fontFamily: '"Exo 2", sans-serif' }}>
+                  {chat.isPrivate && <Icon name="Lock" size={11} style={{ color: "rgba(0,255,179,0.6)", flexShrink: 0 }} />}
+                  {chat.name}
+                </span>
                 <span className="text-xs ml-2 flex-shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>{chat.time}</span>
               </div>
               <div className="flex items-center justify-between mt-0.5">
@@ -902,6 +908,8 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [newChatName, setNewChatName] = useState("");
   const [newChatEmoji, setNewChatEmoji] = useState("💬");
+  const [newChatPrivate, setNewChatPrivate] = useState(false);
+  const [selectedMembers, setSelectedMembers] = useState<number[]>([]);
   const [creatingChat, setCreatingChat] = useState(false);
   const [chatCreated, setChatCreated] = useState(false);
 
@@ -916,14 +924,31 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
 
   const createGroupChat = async () => {
     if (!newChatName.trim()) return;
+    if (newChatPrivate && selectedMembers.length === 0) return;
     setCreatingChat(true);
     const res = await fetch(`${ADMIN_API}?action=create_chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
-      body: JSON.stringify({ name: newChatName.trim(), avatar: newChatEmoji }),
+      body: JSON.stringify({
+        name: newChatName.trim(), avatar: newChatEmoji,
+        is_private: newChatPrivate,
+        member_ids: newChatPrivate ? selectedMembers : [],
+      }),
     });
     setCreatingChat(false);
-    if (res.ok) { setChatCreated(true); setNewChatName(""); setTimeout(() => setChatCreated(false), 3000); }
+    if (res.ok) {
+      setChatCreated(true);
+      setNewChatName("");
+      setSelectedMembers([]);
+      setNewChatPrivate(false);
+      setTimeout(() => setChatCreated(false), 3000);
+    }
+  };
+
+  const toggleMember = (id: number) => {
+    setSelectedMembers(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
   };
 
   const toggleAdmin = async (memberId: number, currentIsAdmin: boolean) => {
@@ -1268,10 +1293,12 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
 
-            {/* Создать групповой чат */}
+            {/* Создать чат */}
             <div className="glass-card rounded-xl p-4" style={{ border: "1px solid rgba(0,255,179,0.12)" }}>
               <div className="font-semibold text-white mb-3 text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>Создать групповой чат</div>
-              <div className="flex gap-2 mb-2">
+
+              {/* Название */}
+              <div className="flex gap-2 mb-3">
                 <input value={newChatEmoji} onChange={e => setNewChatEmoji(e.target.value)}
                   className="w-12 rounded-xl px-2 py-2.5 text-center text-lg outline-none"
                   style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }} maxLength={2} />
@@ -1280,16 +1307,62 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
                   className="flex-1 rounded-xl px-3 py-2.5 text-sm text-white outline-none"
                   style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }} />
               </div>
+
+              {/* Переключатель: закрытый */}
+              <button onClick={() => { setNewChatPrivate(v => !v); setSelectedMembers([]); }}
+                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl mb-3 transition-all"
+                style={{ background: newChatPrivate ? "rgba(0,255,179,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${newChatPrivate ? "rgba(0,255,179,0.3)" : "rgba(255,255,255,0.08)"}` }}>
+                <div className="flex items-center gap-2">
+                  <Icon name="Lock" size={14} style={{ color: newChatPrivate ? "var(--neon-green)" : "rgba(255,255,255,0.4)" }} />
+                  <span className="text-sm" style={{ color: newChatPrivate ? "var(--neon-green)" : "rgba(255,255,255,0.6)" }}>Закрытый чат</span>
+                </div>
+                <div className="relative w-9 h-5 rounded-full transition-all"
+                  style={{ background: newChatPrivate ? "var(--neon-green)" : "rgba(255,255,255,0.12)" }}>
+                  <span className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+                    style={{ left: newChatPrivate ? "calc(100% - 18px)" : "2px", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
+                </div>
+              </button>
+
+              {/* Выбор участников (только если закрытый) */}
+              {newChatPrivate && (
+                <div className="mb-3">
+                  <div className="text-xs mb-2" style={{ color: "rgba(255,255,255,0.4)" }}>
+                    Выбери участников {selectedMembers.length > 0 && <span style={{ color: "var(--neon-green)" }}>({selectedMembers.length} выбрано)</span>}
+                  </div>
+                  <div className="space-y-1 max-h-40 overflow-y-auto">
+                    {manageMembers.filter(m => m.id !== user.id).map(m => {
+                      const sel = selectedMembers.includes(m.id);
+                      return (
+                        <button key={m.id} onClick={() => toggleMember(m.id)}
+                          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-left transition-all"
+                          style={{ background: sel ? "rgba(0,255,179,0.08)" : "rgba(255,255,255,0.03)", border: `1px solid ${sel ? "rgba(0,255,179,0.25)" : "rgba(255,255,255,0.06)"}` }}>
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs text-white overflow-hidden flex-shrink-0"
+                            style={{ background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "1px solid rgba(0,255,179,0.2)" }}>
+                            {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" /> : m.nickname[0].toUpperCase()}
+                          </div>
+                          <span className="flex-1 text-sm text-white truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{m.nickname}</span>
+                          <div className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center"
+                            style={{ background: sel ? "var(--neon-green)" : "rgba(255,255,255,0.1)", border: sel ? "none" : "1px solid rgba(255,255,255,0.2)" }}>
+                            {sel && <Icon name="Check" size={10} style={{ color: "#000" }} />}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {chatCreated && (
                 <div className="text-xs mb-2 px-3 py-2 rounded-lg" style={{ background: "rgba(0,255,179,0.1)", color: "var(--neon-green)", border: "1px solid rgba(0,255,179,0.2)" }}>
                   Чат создан! Он появится в разделе «Чаты».
                 </div>
               )}
-              <button onClick={createGroupChat} disabled={creatingChat || !newChatName.trim()}
+              <button onClick={createGroupChat}
+                disabled={creatingChat || !newChatName.trim() || (newChatPrivate && selectedMembers.length === 0)}
                 className="neon-btn-filled w-full rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-2"
                 style={{ fontFamily: '"Exo 2", sans-serif', opacity: creatingChat ? 0.7 : 1 }}>
-                {creatingChat ? <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} /> : <Icon name="Plus" size={15} />}
-                Создать чат
+                {creatingChat ? <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} /> : <Icon name={newChatPrivate ? "Lock" : "Plus"} size={15} />}
+                {newChatPrivate ? "Создать закрытый чат" : "Создать чат"}
               </button>
             </div>
 
