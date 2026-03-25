@@ -144,6 +144,7 @@ interface User {
   points: number;
   avatarUrl?: string | null;
   isAdmin?: boolean;
+  isFounder?: boolean;
 }
 
 const SESSION_KEY = "motoclub_session";
@@ -1433,6 +1434,9 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
   const [manageMembers, setManageMembers] = useState<User[]>([]);
   const [manageLoading, setManageLoading] = useState(false);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
+  const [roleInput, setRoleInput] = useState<Record<number, string>>({});
+  const [savingRoleId, setSavingRoleId] = useState<number | null>(null);
   const [newChatName, setNewChatName] = useState("");
   const [newChatEmoji, setNewChatEmoji] = useState("💬");
   const [newChatPrivate, setNewChatPrivate] = useState(false);
@@ -1490,6 +1494,22 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
       setManageMembers(prev => prev.map(m => m.id === memberId ? { ...m, isAdmin: d.isAdmin } : m));
     }
     setTogglingId(null);
+  };
+
+  const saveRole = async (memberId: number) => {
+    const role = (roleInput[memberId] || "").trim();
+    setSavingRoleId(memberId);
+    const res = await fetch(`${ADMIN_API}?action=set_role`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+      body: JSON.stringify({ user_id: memberId, role }),
+    });
+    const d = await res.json();
+    if (res.ok) {
+      setManageMembers(prev => prev.map(m => m.id === memberId ? { ...m, role: d.role } : m));
+      setEditingRoleId(null);
+    }
+    setSavingRoleId(null);
   };
 
   const [editNickname, setEditNickname] = useState(user.nickname);
@@ -1619,7 +1639,15 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
           </div>
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
           <div className="flex-1 min-w-0">
-            <div className="font-bold text-white truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{user.nickname}</div>
+            <div className="font-bold text-white truncate flex items-center gap-2" style={{ fontFamily: '"Exo 2", sans-serif' }}>
+              {user.nickname}
+              {user.isFounder && (
+                <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                  style={{ background: "rgba(255,107,0,0.15)", color: "#ff6b00", border: "1px solid rgba(255,107,0,0.3)" }}>
+                  Основатель
+                </span>
+              )}
+            </div>
             <div className="text-sm mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{user.car || user.role}</div>
             <div className="mt-1"><NeonBadge label={user.level} color={user.levelColor} /></div>
           </div>
@@ -1902,7 +1930,8 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
                   <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} />
                 </div>
               ) : manageMembers.map(m => (
-                <div key={m.id} className="flex items-center gap-3 py-2.5 px-1">
+                <div key={m.id} className="py-2.5 px-1 border-b" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+                <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm text-white overflow-hidden flex-shrink-0"
                     style={{ background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "1px solid rgba(0,255,179,0.2)" }}>
                     {m.avatarUrl ? <img src={m.avatarUrl} alt="" className="w-full h-full object-cover" /> : m.nickname[0].toUpperCase()}
@@ -1911,25 +1940,82 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
                     <div className="font-semibold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{m.nickname}</div>
                     <div className="text-xs truncate" style={{ color: "rgba(255,255,255,0.4)" }}>{m.car || m.role}</div>
                   </div>
-                  {m.id !== user.id && (
-                    <button onClick={() => toggleAdmin(m.id, !!m.isAdmin)} disabled={togglingId === m.id}
-                      className="flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
-                      style={{
-                        fontFamily: '"Exo 2", sans-serif',
-                        background: m.isAdmin ? "rgba(0,255,179,0.12)" : "rgba(255,255,255,0.06)",
-                        border: m.isAdmin ? "1px solid rgba(0,255,179,0.35)" : "1px solid rgba(255,255,255,0.12)",
-                        color: m.isAdmin ? "var(--neon-green)" : "rgba(255,255,255,0.4)",
-                        opacity: togglingId === m.id ? 0.6 : 1,
-                      }}>
-                      {togglingId === m.id
-                        ? <div className="w-3 h-3 rounded-full border border-current animate-spin opacity-60" />
-                        : m.isAdmin ? "Адм ✓" : "Адм"}
-                    </button>
-                  )}
-                  {m.id === user.id && m.isAdmin && (
-                    <span className="text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "rgba(0,255,179,0.1)", color: "var(--neon-green)", border: "1px solid rgba(0,255,179,0.2)" }}>Вы</span>
-                  )}
+                  {/* Бейджи */}
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    {m.isFounder && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                        style={{ background: "rgba(255,107,0,0.15)", color: "#ff6b00", border: "1px solid rgba(255,107,0,0.3)", fontFamily: '"Exo 2", sans-serif' }}>
+                        Основатель
+                      </span>
+                    )}
+                    {!m.isFounder && m.isAdmin && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                        style={{ background: "rgba(0,255,179,0.1)", color: "var(--neon-green)", border: "1px solid rgba(0,255,179,0.2)", fontFamily: '"Exo 2", sans-serif' }}>
+                        Админ
+                      </span>
+                    )}
+                    {m.id === user.id && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+                        style={{ background: "rgba(255,255,255,0.06)", color: "rgba(255,255,255,0.4)", border: "1px solid rgba(255,255,255,0.1)", fontFamily: '"Exo 2", sans-serif' }}>
+                        Вы
+                      </span>
+                    )}
+                  </div>
                 </div>
+
+                {/* Строка управления (только для других, только основатель) */}
+                {user.isFounder && m.id !== user.id && (
+                  <div className="flex items-center gap-2 mt-1.5 pl-[52px]">
+                    {/* Должность */}
+                    {editingRoleId === m.id ? (
+                      <div className="flex items-center gap-1.5 flex-1">
+                        <input value={roleInput[m.id] ?? m.role ?? ""}
+                          onChange={e => setRoleInput(prev => ({ ...prev, [m.id]: e.target.value }))}
+                          className="flex-1 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none"
+                          style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(0,255,179,0.25)" }}
+                          placeholder="Должность..."
+                          onKeyDown={e => e.key === "Enter" && saveRole(m.id)}
+                          autoFocus />
+                        <button onClick={() => saveRole(m.id)} disabled={savingRoleId === m.id}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ background: "var(--neon-green)" }}>
+                          {savingRoleId === m.id
+                            ? <div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,0,0,0.2)", borderTopColor: "#000" }} />
+                            : <Icon name="Check" size={13} style={{ color: "#000" }} />}
+                        </button>
+                        <button onClick={() => setEditingRoleId(null)}
+                          className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                          style={{ background: "rgba(255,255,255,0.07)" }}>
+                          <Icon name="X" size={13} style={{ color: "rgba(255,255,255,0.5)" }} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => { setEditingRoleId(m.id); setRoleInput(prev => ({ ...prev, [m.id]: m.role || "" })); }}
+                        className="flex items-center gap-1 text-xs px-2.5 py-1 rounded-lg transition-all"
+                        style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.45)" }}>
+                        <Icon name="Pencil" size={11} />
+                        {m.role || "Участник"}
+                      </button>
+                    )}
+                    {/* Кнопка Адм — только основатель, не для других основателей */}
+                    {!m.isFounder && (
+                      <button onClick={() => toggleAdmin(m.id, !!m.isAdmin)} disabled={togglingId === m.id}
+                        className="flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
+                        style={{
+                          fontFamily: '"Exo 2", sans-serif',
+                          background: m.isAdmin ? "rgba(0,255,179,0.12)" : "rgba(255,255,255,0.06)",
+                          border: m.isAdmin ? "1px solid rgba(0,255,179,0.35)" : "1px solid rgba(255,255,255,0.12)",
+                          color: m.isAdmin ? "var(--neon-green)" : "rgba(255,255,255,0.4)",
+                          opacity: togglingId === m.id ? 0.6 : 1,
+                        }}>
+                        {togglingId === m.id
+                          ? <div className="w-3 h-3 rounded-full border border-current animate-spin opacity-60" />
+                          : m.isAdmin ? "Адм ✓" : "+ Адм"}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
               ))}
             </div>
 

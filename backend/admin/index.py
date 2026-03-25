@@ -26,12 +26,19 @@ def get_user_id(session_id: str, conn):
     return row[0] if row else None
 
 
-def is_admin(user_id: int, conn) -> bool:
+def get_user_rights(user_id: int, conn):
     cur = conn.cursor()
-    cur.execute(f"SELECT is_admin FROM {SCHEMA}.users WHERE id = %s", (user_id,))
+    cur.execute(f"SELECT is_admin, is_founder FROM {SCHEMA}.users WHERE id = %s", (user_id,))
     row = cur.fetchone()
     cur.close()
-    return bool(row and row[0])
+    if not row:
+        return False, False
+    return bool(row[0]), bool(row[1])
+
+
+def is_admin(user_id: int, conn) -> bool:
+    admin, _ = get_user_rights(user_id, conn)
+    return admin
 
 
 def handler(event: dict, context) -> dict:
@@ -61,7 +68,7 @@ def handler(event: dict, context) -> dict:
     if method == "GET" and action == "members":
         cur = conn.cursor()
         cur.execute(f"""
-            SELECT id, nickname, car, role, level, level_color, points, avatar_url, is_admin
+            SELECT id, nickname, car, role, level, level_color, points, avatar_url, is_admin, is_founder
             FROM {SCHEMA}.users ORDER BY points DESC
         """)
         rows = cur.fetchall()
@@ -69,7 +76,7 @@ def handler(event: dict, context) -> dict:
         conn.close()
         members = [{"id": r[0], "nickname": r[1], "car": r[2], "role": r[3],
                     "level": r[4], "levelColor": r[5], "points": r[6],
-                    "avatarUrl": r[7], "isAdmin": bool(r[8])} for r in rows]
+                    "avatarUrl": r[7], "isAdmin": bool(r[8]), "isFounder": bool(r[9])} for r in rows]
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(members, ensure_ascii=False)}
 
     # Все действия ниже — только для администраторов
@@ -78,7 +85,11 @@ def handler(event: dict, context) -> dict:
         return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Требуется авторизация"})}
 
     user_id = get_user_id(session_id, conn)
-    if not user_id or not is_admin(user_id, conn):
+    if not user_id:
+        conn.close()
+        return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Сессия не найдена"})}
+    caller_is_admin, caller_is_founder = get_user_rights(user_id, conn)
+    if not caller_is_admin:
         conn.close()
         return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "Доступ запрещён — только для администраторов"})}
 
@@ -163,19 +174,44 @@ def handler(event: dict, context) -> dict:
         if not target_id:
             conn.close()
             return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "user_id required"})}
+        if not caller_is_founder:
+            conn.close()
+            return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "Только основатель может назначать администраторов"})}
         if int(target_id) == user_id:
             conn.close()
             return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Нельзя изменить свои права"})}
         cur = conn.cursor()
-        cur.execute(f"UPDATE {SCHEMA}.users SET is_admin = %s WHERE id = %s RETURNING id, nickname, is_admin",
+        cur.execute(f"UPDATE {SCHEMA}.users SET is_admin = %s WHERE id = %s AND is_founder = false RETURNING id, nickname, is_admin",
                     (value, int(target_id)))
         row = cur.fetchone()
         conn.commit()
         cur.close()
         conn.close()
         if not row:
-            return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Пользователь не найден"})}
+            return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Пользователь не найден или является основателем"})}
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"id": row[0], "nickname": row[1], "isAdmin": row[2]})}
+
+    # ── POST ?action=set_role — установить подпись/должность участнику (только основатель)
+    if method == "POST" and action == "set_role":
+        if not caller_is_founder:
+            conn.close()
+            return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "Только основатель может назначать должности"})}
+        body = json.loads(event.get("body") or "{}")
+        target_id = body.get("user_id")
+        new_role = (body.get("role") or "").strip()
+        if not target_id:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "user_id required"})}
+        cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.users SET role = %s WHERE id = %s RETURNING id, nickname, role",
+                    (new_role or "Участник", int(target_id)))
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        if not row:
+            return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Пользователь не найден"})}
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"id": row[0], "nickname": row[1], "role": row[2]}, ensure_ascii=False)}
 
     # ── GET ?action=chat_members&chat_id=X — участники закрытого чата (публично)
     if method == "GET" and action == "chat_members":

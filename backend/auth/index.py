@@ -55,6 +55,7 @@ def user_to_dict(row) -> dict:
         "points": row[6],
         "avatarUrl": row[7] if len(row) > 7 else None,
         "isAdmin": bool(row[8]) if len(row) > 8 else False,
+        "isFounder": bool(row[9]) if len(row) > 9 else False,
     }
 
 
@@ -93,7 +94,7 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(f"""
-            SELECT id, nickname, car, role, level, level_color, points, avatar_url, is_admin
+            SELECT id, nickname, car, role, level, level_color, points, avatar_url, is_admin, is_founder
             FROM {SCHEMA}.users
             WHERE LOWER(nickname) = LOWER(%s) AND pin = %s
         """, (nickname, hash_pin(pin)))
@@ -134,7 +135,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(f"""
             INSERT INTO {SCHEMA}.users (nickname, pin, car, role, level, level_color, points)
             VALUES (%s, %s, %s, 'Участник', 'Новичок', '#00ffb3', 0)
-            RETURNING id, nickname, car, role, level, level_color, points, avatar_url, is_admin
+            RETURNING id, nickname, car, role, level, level_color, points, avatar_url, is_admin, is_founder
         """, (nickname, hash_pin(pin), car))
         row = cur.fetchone()
         conn.commit()
@@ -188,7 +189,7 @@ def handler(event: dict, context) -> dict:
 
         cur.execute(f"""
             UPDATE {SCHEMA}.users SET nickname = %s, car = %s WHERE id = %s
-            RETURNING id, nickname, car, role, level, level_color, points, avatar_url, is_admin
+            RETURNING id, nickname, car, role, level, level_color, points, avatar_url, is_admin, is_founder
         """, (new_nickname, new_car, user_id))
         row = cur.fetchone()
         conn.commit()
