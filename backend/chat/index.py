@@ -128,7 +128,7 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(f"""
-            SELECT id, text, sender, created_at, type, media_url
+            SELECT id, text, sender, created_at, type, media_url, is_edited, is_removed
             FROM {SCHEMA}.messages
             WHERE chat_id = %s AND id > %s
             ORDER BY created_at ASC
@@ -137,7 +137,8 @@ def handler(event: dict, context) -> dict:
         cur.close()
         conn.close()
         msgs = [{"id": r[0], "text": r[1], "sender": r[2], "out": (r[2] == me) if me else False,
-                 "time": fmt_time(r[3]), "type": r[4] or "text", "mediaUrl": r[5]} for r in rows]
+                 "time": fmt_time(r[3]), "type": r[4] or "text", "mediaUrl": r[5],
+                 "isEdited": bool(r[6]), "isRemoved": bool(r[7])} for r in rows]
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(msgs, ensure_ascii=False)}
 
     # POST ?action=messages — отправить сообщение (text/image/voice/emoji)
@@ -184,6 +185,51 @@ def handler(event: dict, context) -> dict:
         msg = {"id": r[0], "text": r[1], "sender": r[2], "out": r[3], "time": fmt_time(r[4]),
                "type": r[5], "mediaUrl": r[6]}
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(msg, ensure_ascii=False)}
+
+    # PUT ?action=edit_message — редактировать своё сообщение
+    if method in ("PUT", "POST") and action == "edit_message":
+        body = json.loads(event.get("body") or "{}")
+        msg_id = body.get("id")
+        new_text = (body.get("text") or "").strip()
+        if not msg_id or not new_text:
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "id and text required"})}
+        conn = get_conn()
+        user_id = get_user_id_from_session(session_id, conn) if session_id else None
+        cur = conn.cursor()
+        cur.execute(f"""
+            UPDATE {SCHEMA}.messages SET text = %s, is_edited = true
+            WHERE id = %s AND (user_id = %s OR (user_id IS NULL AND is_out = true))
+            RETURNING id
+        """, (new_text, int(msg_id), user_id))
+        updated = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        if not updated:
+            return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "not allowed"})}
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
+
+    # POST ?action=remove_message — удалить своё сообщение (мягкое удаление)
+    if method == "POST" and action == "remove_message":
+        body = json.loads(event.get("body") or "{}")
+        msg_id = body.get("id")
+        if not msg_id:
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "id required"})}
+        conn = get_conn()
+        user_id = get_user_id_from_session(session_id, conn) if session_id else None
+        cur = conn.cursor()
+        cur.execute(f"""
+            UPDATE {SCHEMA}.messages SET is_removed = true, text = 'Сообщение удалено'
+            WHERE id = %s AND (user_id = %s OR (user_id IS NULL AND is_out = true))
+            RETURNING id
+        """, (int(msg_id), user_id))
+        removed = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        if not removed:
+            return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "not allowed"})}
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
     # POST ?action=create_chat — создать личный чат между двумя пользователями
     if method == "POST" and action == "create_chat":
