@@ -136,9 +136,6 @@ def handler(event: dict, context) -> dict:
         user = user_to_dict(row)
         sid = secrets.token_hex(24)
         _sessions[sid] = user
-        conn.commit()
-        cur.close()
-        conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"session_id": sid, "user": user}, ensure_ascii=False)}
 
     # POST ?action=update — обновить никнейм и/или автомобиль
