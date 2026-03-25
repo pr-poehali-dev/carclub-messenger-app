@@ -203,6 +203,8 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const audioCtxRef = useRef<any>(null);
 
   // Загружаем список чатов из API
   useEffect(() => {
@@ -214,7 +216,9 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   const playNotification = () => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const ctx = audioCtxRef.current;
+      if (ctx.state === "suspended") ctx.resume();
       const o = ctx.createOscillator();
       const g = ctx.createGain();
       o.connect(g); g.connect(ctx.destination);
