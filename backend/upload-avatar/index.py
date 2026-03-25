@@ -38,7 +38,7 @@ def handler(event: dict, context) -> dict:
     conn = get_conn()
     cur = conn.cursor()
 
-    cur.execute(f"SELECT id FROM {SCHEMA}.sessions WHERE session_id = %s", (session_id,))
+    cur.execute(f"SELECT user_id FROM {SCHEMA}.sessions WHERE session_id = %s", (session_id,))
     row = cur.fetchone()
     if not row:
         conn.close()
