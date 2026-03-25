@@ -36,6 +36,8 @@ interface ClubEvent {
   tag: string;
   tagColor: string;
   emoji: string;
+  description?: string;
+  createdBy?: number | null;
 }
 
 interface GalleryItem {
@@ -89,6 +91,7 @@ const UPLOAD_AVATAR_API = "https://functions.poehali.dev/6b54dfba-6b17-4476-9ac2
 const ADMIN_API = "https://functions.poehali.dev/fd18bf34-6c49-4fab-83c5-fb58dc050170";
 const GALLERY_API = "https://functions.poehali.dev/bd3184a0-efb5-4842-84d5-9f4e3c45aa67";
 const PUSH_API = "https://functions.poehali.dev/8ccad4d2-a7fe-4991-a983-f680cb3012c6";
+const EVENTS_API = "https://functions.poehali.dev/b3ec9915-b824-43ba-bf50-83802f8d4527";
 
 interface User {
   id: number;
@@ -777,39 +780,131 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
 }
 
 // ─── EVENTS SCREEN ────────────────────────────────────────────────────────────
-function EventsScreen() {
-  const [creating, setCreating] = useState(false);
+const EMPTY_EVENT_FORM = { title: "", date: "", location: "", tag: "Событие", tagColor: "#00ffb3", emoji: "📅", description: "" };
+
+function EventsScreen({ user, sessionId }: { user: User; sessionId: string }) {
+  const [evList, setEvList] = useState<ClubEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [mode, setMode] = useState<"none" | "create" | "edit">("none");
+  const [form, setForm] = useState(EMPTY_EVENT_FORM);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+
+  const canAdmin = user.isAdmin || user.isFounder;
+
+  const loadEvents = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch(EVENTS_API);
+    const data = await res.json();
+    setEvList(data.events || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { loadEvents(); }, [loadEvents]);
+
+  const openCreate = () => {
+    setForm(EMPTY_EVENT_FORM);
+    setEditingId(null);
+    setMode("create");
+  };
+
+  const openEdit = (ev: ClubEvent) => {
+    setForm({ title: ev.title, date: ev.date, location: ev.location, tag: ev.tag, tagColor: ev.tagColor, emoji: ev.emoji, description: ev.description || "" });
+    setEditingId(ev.id);
+    setMode("edit");
+  };
+
+  const handleSave = async () => {
+    if (!form.title.trim() || !form.date.trim() || !form.location.trim()) return;
+    setSaving(true);
+    if (mode === "create") {
+      await fetch(EVENTS_API, { method: "POST", headers: { "Content-Type": "application/json", "X-Session-Id": sessionId }, body: JSON.stringify(form) });
+    } else if (mode === "edit" && editingId) {
+      await fetch(`${EVENTS_API}?id=${editingId}`, { method: "PUT", headers: { "Content-Type": "application/json", "X-Session-Id": sessionId }, body: JSON.stringify(form) });
+    }
+    setSaving(false);
+    setMode("none");
+    loadEvents();
+  };
+
+  const handleDelete = async (id: number) => {
+    await fetch(`${EVENTS_API}?id=${id}`, { method: "DELETE", headers: { "X-Session-Id": sessionId } });
+    setDeleteId(null);
+    loadEvents();
+  };
+
+  const inputStyle = { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)" };
+  const ff = { fontFamily: '"Exo 2", sans-serif' };
 
   return (
     <div className="flex flex-col h-full animate-fade-in">
       <div className="px-4 pt-4 pb-2 flex items-center justify-between">
-        <h2 className="font-bold text-xl text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>События</h2>
-        <button onClick={() => setCreating(true)} className="neon-btn text-xs px-3 py-1.5 rounded-lg flex items-center gap-1"
-          style={{ fontFamily: '"Exo 2", sans-serif' }}>
-          <Icon name="Plus" size={14} />
-          Создать
-        </button>
+        <h2 className="font-bold text-xl text-white" style={ff}>События</h2>
+        {canAdmin && mode === "none" && (
+          <button onClick={openCreate} className="neon-btn text-xs px-3 py-1.5 rounded-lg flex items-center gap-1" style={ff}>
+            <Icon name="Plus" size={14} />
+            Создать
+          </button>
+        )}
       </div>
 
-      {creating && (
+      {mode !== "none" && (
         <div className="mx-4 mb-3 rounded-xl p-4 animate-fade-in" style={{ background: "rgba(0,255,179,0.06)", border: "1px solid rgba(0,255,179,0.2)" }}>
-          <div className="font-semibold text-white text-sm mb-3" style={{ fontFamily: '"Exo 2", sans-serif' }}>Новое событие</div>
-          {["Название события", "Дата и время", "Место проведения"].map(ph => (
-            <input key={ph} className="w-full mb-2 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder-gray-600"
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)" }} placeholder={ph} />
-          ))}
+          <div className="font-semibold text-white text-sm mb-3" style={ff}>{mode === "create" ? "Новое событие" : "Редактировать событие"}</div>
+          <input className="w-full mb-2 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder-gray-600" style={inputStyle}
+            placeholder="Название события" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+          <input className="w-full mb-2 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder-gray-600" style={inputStyle}
+            placeholder="Дата и время (напр. 5 мая, 18:00)" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+          <input className="w-full mb-2 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder-gray-600" style={inputStyle}
+            placeholder="Место проведения" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} />
+          <div className="flex gap-2 mb-2">
+            <input className="flex-1 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder-gray-600" style={inputStyle}
+              placeholder="Тег (Гонки, Встреча…)" value={form.tag} onChange={e => setForm(f => ({ ...f, tag: e.target.value }))} />
+            <input className="w-20 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder-gray-600" style={inputStyle}
+              placeholder="Цвет" value={form.tagColor} onChange={e => setForm(f => ({ ...f, tagColor: e.target.value }))} />
+            <input className="w-14 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder-gray-600 text-center" style={inputStyle}
+              placeholder="📅" value={form.emoji} onChange={e => setForm(f => ({ ...f, emoji: e.target.value }))} />
+          </div>
+          <textarea className="w-full mb-2 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder-gray-600 resize-none" style={inputStyle}
+            placeholder="Описание (необязательно)" rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} />
           <div className="flex gap-2 mt-1">
-            <button className="neon-btn-filled flex-1 rounded-lg py-2 text-xs font-semibold" style={{ fontFamily: '"Exo 2", sans-serif' }}>Опубликовать</button>
-            <button onClick={() => setCreating(false)} className="flex-1 rounded-lg py-2 text-xs"
+            <button onClick={handleSave} disabled={saving} className="neon-btn-filled flex-1 rounded-lg py-2 text-xs font-semibold" style={ff}>
+              {saving ? "Сохраняю…" : mode === "create" ? "Опубликовать" : "Сохранить"}
+            </button>
+            <button onClick={() => setMode("none")} className="flex-1 rounded-lg py-2 text-xs"
+              style={{ border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)" }}>Отмена</button>
+          </div>
+        </div>
+      )}
+
+      {deleteId && (
+        <div className="mx-4 mb-3 rounded-xl p-4 animate-fade-in" style={{ background: "rgba(255,107,0,0.08)", border: "1px solid rgba(255,107,0,0.3)" }}>
+          <div className="text-white text-sm mb-3" style={ff}>Удалить это событие?</div>
+          <div className="flex gap-2">
+            <button onClick={() => handleDelete(deleteId)} className="flex-1 rounded-lg py-2 text-xs font-semibold text-white"
+              style={{ background: "#ff6b0099", border: "1px solid #ff6b00" }}>Удалить</button>
+            <button onClick={() => setDeleteId(null)} className="flex-1 rounded-lg py-2 text-xs"
               style={{ border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)" }}>Отмена</button>
           </div>
         </div>
       )}
 
       <div className="flex-1 overflow-y-auto px-4 space-y-3 pb-4">
-        {events.map((ev, i) => (
-          <div key={ev.id} className="glass-card rounded-xl p-4 card-hover cursor-pointer animate-fade-in"
-            style={{ animationDelay: `${i * 0.06}s` }}>
+        {loading && (
+          <div className="flex items-center justify-center h-32" style={{ color: "rgba(255,255,255,0.3)" }}>
+            <Icon name="Loader" size={20} className="animate-spin mr-2" />
+            <span className="text-sm">Загрузка…</span>
+          </div>
+        )}
+        {!loading && evList.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-32 gap-2" style={{ color: "rgba(255,255,255,0.3)" }}>
+            <Icon name="Calendar" size={32} />
+            <span className="text-sm">Событий пока нет</span>
+          </div>
+        )}
+        {evList.map((ev, i) => (
+          <div key={ev.id} className="glass-card rounded-xl p-4 animate-fade-in" style={{ animationDelay: `${i * 0.06}s` }}>
             <div className="flex items-start gap-3">
               <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
                 style={{ background: `${ev.tagColor}18`, border: `1px solid ${ev.tagColor}35` }}>
@@ -817,8 +912,22 @@ function EventsScreen() {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-bold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>{ev.title}</h3>
-                  <NeonBadge label={ev.tag} color={ev.tagColor} />
+                  <h3 className="font-bold text-white text-sm" style={ff}>{ev.title}</h3>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <NeonBadge label={ev.tag} color={ev.tagColor} />
+                    {canAdmin && (
+                      <>
+                        <button onClick={() => { setDeleteId(null); openEdit(ev); }} className="rounded-md p-1 transition-all"
+                          style={{ color: "rgba(255,255,255,0.4)" }}>
+                          <Icon name="Pencil" size={13} />
+                        </button>
+                        <button onClick={() => { setMode("none"); setDeleteId(ev.id); }} className="rounded-md p-1 transition-all"
+                          style={{ color: "rgba(255,107,0,0.6)" }}>
+                          <Icon name="Trash2" size={13} />
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 mt-1.5 text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
                   <Icon name="Calendar" size={12} />
@@ -828,13 +937,16 @@ function EventsScreen() {
                   <Icon name="MapPin" size={12} />
                   <span>{ev.location}</span>
                 </div>
+                {ev.description && (
+                  <p className="mt-1.5 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{ev.description}</p>
+                )}
                 <div className="flex items-center justify-between mt-3">
                   <div className="flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
                     <Icon name="Users" size={12} />
                     <span>{ev.members} участников</span>
                   </div>
                   <button className="text-xs px-3 py-1 rounded-lg font-semibold transition-all"
-                    style={{ fontFamily: '"Exo 2", sans-serif', background: `${ev.tagColor}18`, color: ev.tagColor, border: `1px solid ${ev.tagColor}35` }}>
+                    style={{ ...ff, background: `${ev.tagColor}18`, color: ev.tagColor, border: `1px solid ${ev.tagColor}35` }}>
                     Участвовать
                   </button>
                 </div>
@@ -2459,7 +2571,7 @@ export default function Index() {
             {/* Content */}
             <div className="flex-1 overflow-hidden">
               {tab === "chats" && <ChatsScreen user={session.user} sessionId={session.session_id} />}
-              {tab === "events" && <EventsScreen />}
+              {tab === "events" && <EventsScreen user={session.user} sessionId={session.session_id} />}
               {tab === "gallery" && <GalleryScreen user={session.user} sessionId={session.session_id} />}
               {tab === "members" && <MembersScreen />}
               {tab === "search" && <SearchScreen />}
