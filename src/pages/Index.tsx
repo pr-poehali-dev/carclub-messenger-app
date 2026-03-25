@@ -808,6 +808,9 @@ function EventsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [joining, setJoining] = useState<number | null>(null);
+  const [participantsOpen, setParticipantsOpen] = useState<number | null>(null);
+  const [participantsMap, setParticipantsMap] = useState<Record<number, { id: number; nickname: string; avatarUrl?: string; car: string; role: string }[]>>({});
+  const [participantsLoading, setParticipantsLoading] = useState<number | null>(null);
 
   const canAdmin = user.isAdmin || user.isFounder;
 
@@ -861,6 +864,26 @@ function EventsScreen({ user, sessionId }: { user: User; sessionId: string }) {
       setEvList(prev => prev.map(e => e.id === ev.id ? { ...e, joined: data.joined, members: data.members } : e));
     }
     setJoining(null);
+    if (participantsOpen === ev.id) {
+      loadParticipants(ev.id);
+    }
+  };
+
+  const loadParticipants = async (eventId: number) => {
+    setParticipantsLoading(eventId);
+    const res = await fetch(`${EVENTS_API}?action=participants&id=${eventId}`);
+    const data = await res.json();
+    setParticipantsMap(prev => ({ ...prev, [eventId]: data.participants || [] }));
+    setParticipantsLoading(null);
+  };
+
+  const toggleParticipants = (eventId: number) => {
+    if (participantsOpen === eventId) {
+      setParticipantsOpen(null);
+    } else {
+      setParticipantsOpen(eventId);
+      if (!participantsMap[eventId]) loadParticipants(eventId);
+    }
   };
 
   const inputStyle = { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)" };
@@ -970,10 +993,14 @@ function EventsScreen({ user, sessionId }: { user: User; sessionId: string }) {
                   <p className="mt-1.5 text-xs" style={{ color: "rgba(255,255,255,0.45)" }}>{ev.description}</p>
                 )}
                 <div className="flex items-center justify-between mt-3">
-                  <div className="flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+                  <button
+                    onClick={() => toggleParticipants(ev.id)}
+                    className="flex items-center gap-1 text-xs transition-all"
+                    style={{ color: participantsOpen === ev.id ? ev.tagColor : "rgba(255,255,255,0.4)" }}>
                     <Icon name="Users" size={12} />
                     <span>{ev.members} участников</span>
-                  </div>
+                    <Icon name={participantsOpen === ev.id ? "ChevronUp" : "ChevronDown"} size={11} />
+                  </button>
                   <button
                     onClick={() => handleJoin(ev)}
                     disabled={joining === ev.id}
@@ -985,6 +1012,34 @@ function EventsScreen({ user, sessionId }: { user: User; sessionId: string }) {
                     {joining === ev.id ? "…" : ev.joined ? "✓ Участвую" : "Участвовать"}
                   </button>
                 </div>
+                {participantsOpen === ev.id && (
+                  <div className="mt-2 rounded-lg overflow-hidden animate-fade-in" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                    {participantsLoading === ev.id ? (
+                      <div className="flex items-center justify-center py-3 gap-2" style={{ color: "rgba(255,255,255,0.3)" }}>
+                        <Icon name="Loader" size={14} className="animate-spin" />
+                        <span className="text-xs">Загрузка…</span>
+                      </div>
+                    ) : (participantsMap[ev.id] || []).length === 0 ? (
+                      <div className="py-3 text-center text-xs" style={{ color: "rgba(255,255,255,0.25)" }}>Пока никто не записался</div>
+                    ) : (
+                      <div className="divide-y" style={{ borderColor: "rgba(255,255,255,0.05)" }}>
+                        {(participantsMap[ev.id] || []).map(p => (
+                          <div key={p.id} className="flex items-center gap-2 px-3 py-2">
+                            <div className="w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold overflow-hidden"
+                              style={{ background: `${ev.tagColor}25`, color: ev.tagColor, border: `1px solid ${ev.tagColor}40` }}>
+                              {p.avatarUrl ? <img src={p.avatarUrl} className="w-full h-full object-cover" /> : p.nickname[0].toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-semibold text-white truncate" style={ff}>{p.nickname}</div>
+                              {p.car && <div className="text-xs truncate" style={{ color: "rgba(255,255,255,0.35)" }}>{p.car}</div>}
+                            </div>
+                            <div className="text-xs flex-shrink-0" style={{ color: "rgba(255,255,255,0.3)" }}>{p.role}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

@@ -46,6 +46,25 @@ def handler(event: dict, context) -> dict:
     conn = get_conn()
 
     try:
+        if method == "GET" and params.get("action") == "participants":
+            event_id = params.get("id")
+            if not event_id:
+                conn.close()
+                return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "id required"})}
+            cur = conn.cursor()
+            cur.execute(f"""
+                SELECT u.id, u.nickname, u.avatar_url, u.car, u.role
+                FROM {SCHEMA}.event_participants ep
+                JOIN {SCHEMA}.users u ON u.id = ep.user_id
+                WHERE ep.event_id = %s
+                ORDER BY ep.joined_at ASC
+            """, (int(event_id),))
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            participants = [{"id": r[0], "nickname": r[1], "avatarUrl": r[2], "car": r[3], "role": r[4]} for r in rows]
+            return {"statusCode": 200, "headers": CORS, "body": json.dumps({"participants": participants})}
+
         if method == "GET":
             user_id = get_user_id(session_id, conn) if session_id else None
             cur = conn.cursor()

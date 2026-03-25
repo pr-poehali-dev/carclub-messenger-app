@@ -18,6 +18,12 @@
       "method": "PATCH",
       "path": "/?id=1",
       "expectedStatus": 401
+    },
+    {
+      "name": "GET participants list",
+      "method": "GET",
+      "path": "/?action=participants&id=6",
+      "expectedStatus": 200
     }
   ]
 }
