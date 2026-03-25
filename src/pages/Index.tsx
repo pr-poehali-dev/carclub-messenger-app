@@ -1,14 +1,799 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from "react";
+import Icon from "@/components/ui/icon";
 
-const Index = () => {
+// ─── TYPES ───────────────────────────────────────────────────────────────────
+type Tab = "chats" | "events" | "gallery" | "members" | "search" | "settings";
+
+interface Message {
+  id: number;
+  text: string;
+  time: string;
+  out: boolean;
+}
+
+interface Chat {
+  id: number;
+  name: string;
+  avatar: string;
+  lastMsg: string;
+  time: string;
+  unread: number;
+  online: boolean;
+  isGroup: boolean;
+  messages: Message[];
+}
+
+interface ClubEvent {
+  id: number;
+  title: string;
+  date: string;
+  location: string;
+  members: number;
+  tag: string;
+  tagColor: string;
+  emoji: string;
+}
+
+interface GalleryItem {
+  id: number;
+  emoji: string;
+  title: string;
+  event: string;
+  likes: number;
+  isVideo?: boolean;
+  bg: string;
+}
+
+interface Member {
+  id: number;
+  name: string;
+  car: string;
+  avatar: string;
+  level: string;
+  levelColor: string;
+  points: number;
+  online: boolean;
+  role: string;
+}
+
+// ─── MOCK DATA ────────────────────────────────────────────────────────────────
+const chats: Chat[] = [
+  {
+    id: 1, name: "🏎️ Общий чат клуба", avatar: "🏁", lastMsg: "Едем в воскресенье!", time: "14:32",
+    unread: 5, online: true, isGroup: true,
+    messages: [
+      { id: 1, text: "Всем привет! Едем в воскресенье на трек?", time: "14:28", out: false },
+      { id: 2, text: "Я точно буду! Уже подготовил резину 🏎️", time: "14:30", out: true },
+      { id: 3, text: "Едем в воскресенье!", time: "14:32", out: false },
+    ]
+  },
+  {
+    id: 2, name: "Максим Рублёв", avatar: "М", lastMsg: "Когда встреча?", time: "12:15",
+    unread: 1, online: true, isGroup: false,
+    messages: [
+      { id: 1, text: "Привет! Когда встреча клуба?", time: "12:10", out: false },
+      { id: 2, text: "В субботу в 10:00 на парковке ТЦ", time: "12:15", out: true },
+    ]
+  },
+  {
+    id: 3, name: "🔥 Дрифт-команда", avatar: "🔥", lastMsg: "Новые фото в галерее!", time: "вчера",
+    unread: 0, online: false, isGroup: true,
+    messages: [
+      { id: 1, text: "Новые фото в галерее!", time: "вчера", out: false },
+    ]
+  },
+  {
+    id: 4, name: "Анна Соколова", avatar: "А", lastMsg: "Спасибо за помощь 🙏", time: "вчера",
+    unread: 0, online: false, isGroup: false,
+    messages: [
+      { id: 1, text: "Спасибо за помощь 🙏", time: "вчера", out: false },
+    ]
+  },
+  {
+    id: 5, name: "⚡ Электрокары", avatar: "⚡", lastMsg: "Тест-драйв в пятницу", time: "пн",
+    unread: 2, online: false, isGroup: true,
+    messages: [
+      { id: 1, text: "Тест-драйв в пятницу, кто участвует?", time: "пн", out: false },
+    ]
+  },
+];
+
+const events: ClubEvent[] = [
+  { id: 1, title: "Ночной трек-день", date: "30 марта, 20:00", location: "Moscow Raceway", members: 24, tag: "Гонки", tagColor: "#00ffb3", emoji: "🏁" },
+  { id: 2, title: "Встреча клуба", date: "5 апреля, 10:00", location: "Лужники, парковка А", members: 47, tag: "Встреча", tagColor: "#00d4ff", emoji: "🤝" },
+  { id: 3, title: "Дрифт-шоу 2026", date: "12 апреля, 14:00", location: "Крокус Экспо", members: 112, tag: "Шоу", tagColor: "#bf00ff", emoji: "🔥" },
+  { id: 4, title: "Сезонное ТО", date: "20 апреля, 9:00", location: "СТО «Мотор»", members: 18, tag: "Сервис", tagColor: "#ff6b00", emoji: "🔧" },
+  { id: 5, title: "Фотосессия суперкаров", date: "27 апреля, 11:00", location: "Воробьёвы горы", members: 31, tag: "Фото", tagColor: "#00ffb3", emoji: "📸" },
+];
+
+const gallery: GalleryItem[] = [
+  { id: 1, emoji: "🏎️", title: "Moscow Raceway Night", event: "Трек-день", likes: 84, bg: "from-green-900/40 to-cyan-900/40" },
+  { id: 2, emoji: "🔥", title: "Дрифт под дождём", event: "Дрифт-шоу", likes: 127, isVideo: true, bg: "from-purple-900/40 to-pink-900/40" },
+  { id: 3, emoji: "🌆", title: "Ночной город", event: "Фотосессия", likes: 56, bg: "from-blue-900/40 to-indigo-900/40" },
+  { id: 4, emoji: "⚡", title: "Tesla vs Porsche", event: "Тест-драйв", likes: 93, bg: "from-yellow-900/40 to-orange-900/40" },
+  { id: 5, emoji: "🏁", title: "Старт гонки", event: "Трек-день", likes: 201, isVideo: true, bg: "from-red-900/40 to-rose-900/40" },
+  { id: 6, emoji: "🛞", title: "Смена резины", event: "Встреча", likes: 38, bg: "from-slate-900/40 to-gray-900/40" },
+];
+
+const members: Member[] = [
+  { id: 1, name: "Александр Громов", car: "BMW M3 G80", avatar: "А", level: "Легенда", levelColor: "#ff6b00", points: 9850, online: true, role: "Президент клуба" },
+  { id: 2, name: "Максим Рублёв", car: "Nissan GT-R R35", avatar: "М", level: "Эксперт", levelColor: "#bf00ff", points: 7420, online: true, role: "Капитан дрифт-команды" },
+  { id: 3, name: "Анна Соколова", car: "Porsche 911 GT3", avatar: "А", level: "Профи", levelColor: "#00d4ff", points: 5130, online: false, role: "Организатор событий" },
+  { id: 4, name: "Дмитрий Орлов", car: "Mercedes AMG GT", avatar: "Д", level: "Профи", levelColor: "#00d4ff", points: 4890, online: false, role: "Механик" },
+  { id: 5, name: "Кирилл Зайцев", car: "Toyota Supra A90", avatar: "К", level: "Новичок", levelColor: "#00ffb3", points: 1240, online: true, role: "Участник" },
+];
+
+// ─── COMPONENTS ──────────────────────────────────────────────────────────────
+function Avatar({ char, size = "md", online }: { char: string; size?: "sm" | "md" | "lg"; online?: boolean }) {
+  const sizes = { sm: "w-9 h-9 text-sm", md: "w-11 h-11 text-base", lg: "w-16 h-16 text-2xl" };
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4 color-black text-black">Добро пожаловать!</h1>
-        <p className="text-xl text-gray-600">тут будет отображаться ваш проект</p>
+    <div className="relative flex-shrink-0">
+      <div className={`${sizes[size]} rounded-full flex items-center justify-center font-bold`}
+        style={{ fontFamily: '"Exo 2", sans-serif', background: "linear-gradient(135deg, rgba(0,255,179,0.15), rgba(0,212,255,0.1))", border: "1px solid rgba(0,255,179,0.25)" }}>
+        <span style={{ color: "white" }}>{char}</span>
+      </div>
+      {online && (
+        <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
+          style={{ background: "var(--neon-green)", boxShadow: "0 0 6px var(--neon-green)", borderColor: "var(--bg-dark)" }} />
+      )}
+    </div>
+  );
+}
+
+function NeonBadge({ label, color }: { label: string; color: string }) {
+  return (
+    <span className="text-xs px-2 py-0.5 rounded-full font-semibold" style={{ fontFamily: '"Exo 2", sans-serif', color, border: `1px solid ${color}`, background: `${color}18` }}>
+      {label}
+    </span>
+  );
+}
+
+// ─── CHATS SCREEN ─────────────────────────────────────────────────────────────
+function ChatsScreen() {
+  const [activeChat, setActiveChat] = useState<Chat | null>(null);
+  const [msgText, setMsgText] = useState("");
+
+  if (activeChat) {
+    return (
+      <div className="flex flex-col h-full animate-fade-in">
+        <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid rgba(0,255,179,0.12)" }}>
+          <button onClick={() => setActiveChat(null)} className="transition-colors" style={{ color: "rgba(255,255,255,0.5)" }}>
+            <Icon name="ChevronLeft" size={22} />
+          </button>
+          <Avatar char={activeChat.avatar} online={activeChat.online} />
+          <div className="flex-1 min-w-0">
+            <div className="font-semibold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{activeChat.name}</div>
+            <div className="text-xs" style={{ color: activeChat.online ? "var(--neon-green)" : "rgba(255,255,255,0.4)" }}>
+              {activeChat.online ? "онлайн" : "не в сети"}
+            </div>
+          </div>
+          <button className="transition-colors" style={{ color: "rgba(255,255,255,0.5)" }}>
+            <Icon name="Phone" size={18} />
+          </button>
+          <button className="transition-colors ml-2" style={{ color: "rgba(255,255,255,0.5)" }}>
+            <Icon name="MoreVertical" size={18} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+          {activeChat.messages.map(m => (
+            <div key={m.id} className={`flex ${m.out ? "justify-end" : "justify-start"} animate-fade-in`}>
+              <div className={`max-w-[75%] px-4 py-2.5 ${m.out ? "msg-out" : "msg-in"}`}>
+                <p className="text-sm text-white">{m.text}</p>
+                <p className="text-xs mt-1 text-right" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="px-4 py-3" style={{ borderTop: "1px solid rgba(0,255,179,0.12)" }}>
+          <div className="flex items-center gap-2">
+            <button style={{ color: "rgba(255,255,255,0.4)" }}>
+              <Icon name="Paperclip" size={20} />
+            </button>
+            <div className="flex-1 flex items-center rounded-2xl px-4 py-2.5"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
+              <input className="w-full bg-transparent text-sm text-white outline-none placeholder-gray-600"
+                placeholder="Сообщение..." value={msgText} onChange={e => setMsgText(e.target.value)} />
+            </div>
+            <button className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
+              style={{ background: msgText ? "var(--neon-green)" : "rgba(0,255,179,0.1)", border: "1px solid rgba(0,255,179,0.3)" }}>
+              <Icon name="Send" size={16} style={{ color: msgText ? "var(--bg-dark)" : "var(--neon-green)" }} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="px-4 pt-4 pb-3">
+        <h2 className="font-bold text-xl text-white mb-3" style={{ fontFamily: '"Exo 2", sans-serif' }}>Чаты</h2>
+        <div className="flex items-center gap-2 rounded-xl px-3 py-2.5"
+          style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <Icon name="Search" size={16} style={{ color: "rgba(255,255,255,0.35)" }} />
+          <input className="flex-1 bg-transparent text-sm text-white outline-none placeholder-gray-600" placeholder="Поиск чатов..." />
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {chats.map(chat => (
+          <button key={chat.id} onClick={() => setActiveChat(chat)}
+            className="w-full flex items-center gap-3 px-4 py-3 transition-all text-left"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+            <Avatar char={chat.avatar} online={chat.online} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{chat.name}</span>
+                <span className="text-xs ml-2 flex-shrink-0" style={{ color: "rgba(255,255,255,0.35)" }}>{chat.time}</span>
+              </div>
+              <div className="flex items-center justify-between mt-0.5">
+                <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.45)" }}>{chat.lastMsg}</span>
+                {chat.unread > 0 && (
+                  <span className="ml-2 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                    style={{ background: "var(--neon-green)", color: "var(--bg-dark)" }}>
+                    {chat.unread}
+                  </span>
+                )}
+              </div>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      <div className="px-4 pb-4 pt-2">
+        <button className="neon-btn-filled w-full rounded-xl py-3 flex items-center justify-center gap-2 font-semibold text-sm"
+          style={{ fontFamily: '"Exo 2", sans-serif' }}>
+          <Icon name="Plus" size={16} />
+          Новый чат
+        </button>
       </div>
     </div>
   );
-};
+}
 
-export default Index;
+// ─── EVENTS SCREEN ────────────────────────────────────────────────────────────
+function EventsScreen() {
+  const [creating, setCreating] = useState(false);
+
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="px-4 pt-4 pb-2 flex items-center justify-between">
+        <h2 className="font-bold text-xl text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>События</h2>
+        <button onClick={() => setCreating(true)} className="neon-btn text-xs px-3 py-1.5 rounded-lg flex items-center gap-1"
+          style={{ fontFamily: '"Exo 2", sans-serif' }}>
+          <Icon name="Plus" size={14} />
+          Создать
+        </button>
+      </div>
+
+      {creating && (
+        <div className="mx-4 mb-3 rounded-xl p-4 animate-fade-in" style={{ background: "rgba(0,255,179,0.06)", border: "1px solid rgba(0,255,179,0.2)" }}>
+          <div className="font-semibold text-white text-sm mb-3" style={{ fontFamily: '"Exo 2", sans-serif' }}>Новое событие</div>
+          {["Название события", "Дата и время", "Место проведения"].map(ph => (
+            <input key={ph} className="w-full mb-2 rounded-lg px-3 py-2 text-sm text-white outline-none placeholder-gray-600"
+              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)" }} placeholder={ph} />
+          ))}
+          <div className="flex gap-2 mt-1">
+            <button className="neon-btn-filled flex-1 rounded-lg py-2 text-xs font-semibold" style={{ fontFamily: '"Exo 2", sans-serif' }}>Опубликовать</button>
+            <button onClick={() => setCreating(false)} className="flex-1 rounded-lg py-2 text-xs"
+              style={{ border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)" }}>Отмена</button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 overflow-y-auto px-4 space-y-3 pb-4">
+        {events.map((ev, i) => (
+          <div key={ev.id} className="glass-card rounded-xl p-4 card-hover cursor-pointer animate-fade-in"
+            style={{ animationDelay: `${i * 0.06}s` }}>
+            <div className="flex items-start gap-3">
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
+                style={{ background: `${ev.tagColor}18`, border: `1px solid ${ev.tagColor}35` }}>
+                {ev.emoji}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-bold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>{ev.title}</h3>
+                  <NeonBadge label={ev.tag} color={ev.tagColor} />
+                </div>
+                <div className="flex items-center gap-1 mt-1.5 text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
+                  <Icon name="Calendar" size={12} />
+                  <span>{ev.date}</span>
+                </div>
+                <div className="flex items-center gap-1 mt-1 text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
+                  <Icon name="MapPin" size={12} />
+                  <span>{ev.location}</span>
+                </div>
+                <div className="flex items-center justify-between mt-3">
+                  <div className="flex items-center gap-1 text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+                    <Icon name="Users" size={12} />
+                    <span>{ev.members} участников</span>
+                  </div>
+                  <button className="text-xs px-3 py-1 rounded-lg font-semibold transition-all"
+                    style={{ fontFamily: '"Exo 2", sans-serif', background: `${ev.tagColor}18`, color: ev.tagColor, border: `1px solid ${ev.tagColor}35` }}>
+                    Участвовать
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── GALLERY SCREEN ───────────────────────────────────────────────────────────
+function GalleryScreen() {
+  const [selected, setSelected] = useState<GalleryItem | null>(null);
+  const [filter, setFilter] = useState("Все");
+
+  const filtered = filter === "Видео" ? gallery.filter(g => g.isVideo) : filter === "Фото" ? gallery.filter(g => !g.isVideo) : gallery;
+
+  if (selected) {
+    return (
+      <div className="flex flex-col h-full animate-fade-in">
+        <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <button onClick={() => setSelected(null)} style={{ color: "rgba(255,255,255,0.5)" }}>
+            <Icon name="ChevronLeft" size={22} />
+          </button>
+          <span className="font-semibold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>{selected.title}</span>
+        </div>
+        <div className={`mx-4 mt-4 rounded-2xl h-64 relative flex items-center justify-center text-8xl bg-gradient-to-br ${selected.bg}`}
+          style={{ border: "1px solid rgba(255,255,255,0.08)" }}>
+          {selected.isVideo && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-full flex items-center justify-center z-10"
+                style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.2)" }}>
+                <Icon name="Play" size={28} style={{ color: "white" }} />
+              </div>
+            </div>
+          )}
+          <span className="relative z-0">{selected.emoji}</span>
+        </div>
+        <div className="px-4 mt-4 flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>{selected.title}</h3>
+            <p className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.45)" }}>{selected.event}</p>
+          </div>
+          <div className="flex items-center gap-4">
+            <button className="flex items-center gap-1.5 text-sm transition-all" style={{ color: "rgba(255,255,255,0.5)" }}>
+              <Icon name="Heart" size={18} />
+              <span>{selected.likes}</span>
+            </button>
+            <button style={{ color: "rgba(255,255,255,0.5)" }}><Icon name="Share2" size={18} /></button>
+            <button style={{ color: "rgba(255,255,255,0.5)" }}><Icon name="Download" size={18} /></button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="px-4 pt-4 pb-3 flex items-center justify-between">
+        <h2 className="font-bold text-xl text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Галерея</h2>
+        <button className="neon-btn text-xs px-3 py-1.5 rounded-lg flex items-center gap-1" style={{ fontFamily: '"Exo 2", sans-serif' }}>
+          <Icon name="Upload" size={14} />
+          Загрузить
+        </button>
+      </div>
+
+      <div className="flex gap-2 px-4 mb-3">
+        {["Все", "Фото", "Видео"].map(f => (
+          <button key={f} onClick={() => setFilter(f)} className="text-xs px-3 py-1.5 rounded-lg transition-all"
+            style={{ fontFamily: '"Exo 2", sans-serif', background: filter === f ? "rgba(0,255,179,0.12)" : "rgba(255,255,255,0.05)", color: filter === f ? "var(--neon-green)" : "rgba(255,255,255,0.5)", border: filter === f ? "1px solid rgba(0,255,179,0.3)" : "1px solid rgba(255,255,255,0.08)" }}>
+            {f}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <div className="grid grid-cols-2 gap-3">
+          {filtered.map((item, i) => (
+            <button key={item.id} onClick={() => setSelected(item)}
+              className={`relative rounded-xl overflow-hidden aspect-square bg-gradient-to-br ${item.bg} flex items-center justify-center text-5xl transition-all animate-fade-in`}
+              style={{ border: "1px solid rgba(255,255,255,0.07)", animationDelay: `${i * 0.05}s` }}>
+              <span>{item.emoji}</span>
+              {item.isVideo && (
+                <div className="absolute top-2 left-2 flex items-center gap-1 rounded-md px-1.5 py-0.5"
+                  style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}>
+                  <Icon name="Play" size={10} style={{ color: "white" }} />
+                  <span className="text-white" style={{ fontSize: "10px" }}>Видео</span>
+                </div>
+              )}
+              <div className="absolute bottom-2 right-2 flex items-center gap-1 rounded-md px-1.5 py-0.5"
+                style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}>
+                <Icon name="Heart" size={10} style={{ color: "#ff6b6b" }} />
+                <span className="text-white" style={{ fontSize: "10px" }}>{item.likes}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── MEMBERS SCREEN ───────────────────────────────────────────────────────────
+function MembersScreen() {
+  const [selected, setSelected] = useState<Member | null>(null);
+  const maxPoints = members[0].points;
+
+  if (selected) {
+    return (
+      <div className="flex flex-col h-full animate-fade-in">
+        <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <button onClick={() => setSelected(null)} style={{ color: "rgba(255,255,255,0.5)" }}>
+            <Icon name="ChevronLeft" size={22} />
+          </button>
+          <span className="font-semibold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Профиль</span>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="relative mb-4">
+              <div className="w-24 h-24 rounded-full flex items-center justify-center font-bold text-3xl text-white"
+                style={{ fontFamily: '"Exo 2", sans-serif', background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "2px solid rgba(0,255,179,0.35)", boxShadow: "0 0 30px rgba(0,255,179,0.2)" }}>
+                {selected.avatar}
+              </div>
+              {selected.online && (
+                <span className="absolute bottom-1 right-1 w-3.5 h-3.5 rounded-full border-2"
+                  style={{ background: "var(--neon-green)", boxShadow: "0 0 6px var(--neon-green)", borderColor: "var(--bg-dark)" }} />
+              )}
+            </div>
+            <h3 className="font-bold text-white text-xl" style={{ fontFamily: '"Exo 2", sans-serif' }}>{selected.name}</h3>
+            <p className="text-sm mt-1" style={{ color: "rgba(255,255,255,0.5)" }}>{selected.role}</p>
+            <div className="mt-2"><NeonBadge label={selected.level} color={selected.levelColor} /></div>
+          </div>
+
+          <div className="glass-card rounded-xl p-4 mb-3">
+            <div className="text-xs mb-2 font-semibold uppercase tracking-wider" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>Рейтинг</div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-bold text-2xl" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-green)" }}>{selected.points.toLocaleString()}</span>
+              <span className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>очков</span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+              <div className="h-full rounded-full transition-all" style={{ width: `${(selected.points / maxPoints) * 100}%`, background: `linear-gradient(90deg, ${selected.levelColor}, var(--neon-blue))` }} />
+            </div>
+          </div>
+
+          <div className="glass-card rounded-xl p-4 mb-4">
+            <div className="text-xs mb-3 font-semibold uppercase tracking-wider" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>Автомобиль</div>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🚗</span>
+              <span className="font-semibold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>{selected.car}</span>
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <button className="neon-btn-filled flex-1 rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2"
+              style={{ fontFamily: '"Exo 2", sans-serif' }}>
+              <Icon name="MessageCircle" size={16} />
+              Написать
+            </button>
+            <button className="flex-1 rounded-xl py-3 text-sm flex items-center justify-center gap-2"
+              style={{ border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)" }}>
+              <Icon name="UserPlus" size={16} />
+              Добавить
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="px-4 pt-4 pb-3">
+        <h2 className="font-bold text-xl text-white mb-1" style={{ fontFamily: '"Exo 2", sans-serif' }}>Участники</h2>
+        <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{members.length} членов клуба</p>
+      </div>
+
+      <div className="px-4 mb-3">
+        <div className="glass-card rounded-xl p-3 text-center" style={{ border: "1px solid rgba(0,255,179,0.15)" }}>
+          <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>🏆 Топ недели</div>
+          <div className="flex items-center justify-center gap-3">
+            <span className="text-2xl">👑</span>
+            <div className="text-left">
+              <div className="font-bold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>{members[0].name}</div>
+              <div className="text-xs" style={{ color: "var(--neon-green)" }}>{members[0].points.toLocaleString()} очков</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 space-y-2 pb-4">
+        {[...members].sort((a, b) => b.points - a.points).map((m, i) => (
+          <button key={m.id} onClick={() => setSelected(m)}
+            className="w-full glass-card rounded-xl p-3 flex items-center gap-3 card-hover text-left animate-fade-in"
+            style={{ animationDelay: `${i * 0.06}s` }}>
+            <span className="font-bold text-lg w-6 text-center flex-shrink-0" style={{ fontFamily: '"Exo 2", sans-serif', color: i === 0 ? "#ffd700" : i === 1 ? "#c0c0c0" : i === 2 ? "#cd7f32" : "rgba(255,255,255,0.3)" }}>
+              {i + 1}
+            </span>
+            <Avatar char={m.avatar} online={m.online} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>{m.name}</span>
+                <NeonBadge label={m.level} color={m.levelColor} />
+              </div>
+              <div className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.4)" }}>{m.car}</div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <div className="font-bold text-sm" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-green)" }}>{m.points.toLocaleString()}</div>
+              <div className="text-xs" style={{ color: "rgba(255,255,255,0.35)" }}>очков</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── SEARCH SCREEN ────────────────────────────────────────────────────────────
+function SearchScreen() {
+  const [query, setQuery] = useState("");
+
+  const filtered = query.length > 1 ? {
+    chats: chats.filter(c => c.name.toLowerCase().includes(query.toLowerCase())),
+    events: events.filter(e => e.title.toLowerCase().includes(query.toLowerCase())),
+    members: members.filter(m => m.name.toLowerCase().includes(query.toLowerCase())),
+  } : null;
+
+  const hasResults = filtered && (filtered.chats.length + filtered.events.length + filtered.members.length > 0);
+
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="px-4 pt-4 pb-3">
+        <h2 className="font-bold text-xl text-white mb-3" style={{ fontFamily: '"Exo 2", sans-serif' }}>Поиск</h2>
+        <div className="flex items-center gap-2 rounded-xl px-4 py-3"
+          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }}>
+          <Icon name="Search" size={18} style={{ color: "var(--neon-green)" }} />
+          <input autoFocus className="flex-1 bg-transparent text-white outline-none text-sm placeholder-gray-600"
+            placeholder="Чаты, участники, события..." value={query} onChange={e => setQuery(e.target.value)} />
+          {query && <button onClick={() => setQuery("")}><Icon name="X" size={16} style={{ color: "rgba(255,255,255,0.4)" }} /></button>}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        {!filtered ? (
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <span className="text-5xl mb-4 animate-float">🔍</span>
+            <p className="font-semibold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>Введите запрос</p>
+            <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.4)" }}>Поиск по чатам, участникам и событиям</p>
+          </div>
+        ) : !hasResults ? (
+          <div className="flex flex-col items-center justify-center h-40 text-center">
+            <p className="font-semibold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>Ничего не найдено</p>
+            <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.4)" }}>Попробуйте другой запрос</p>
+          </div>
+        ) : (
+          <div className="space-y-4 animate-fade-in">
+            {filtered.chats.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-green)" }}>Чаты</div>
+                {filtered.chats.map(c => (
+                  <div key={c.id} className="glass-card rounded-lg p-3 mb-2 flex items-center gap-3">
+                    <Avatar char={c.avatar} size="sm" online={c.online} />
+                    <div>
+                      <div className="font-semibold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>{c.name}</div>
+                      <div className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{c.lastMsg}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {filtered.events.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-blue)" }}>События</div>
+                {filtered.events.map(e => (
+                  <div key={e.id} className="glass-card rounded-lg p-3 mb-2 flex items-center gap-3">
+                    <span className="text-2xl">{e.emoji}</span>
+                    <div>
+                      <div className="font-semibold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>{e.title}</div>
+                      <div className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{e.date} · {e.location}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {filtered.members.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-wider mb-2" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-purple)" }}>Участники</div>
+                {filtered.members.map(m => (
+                  <div key={m.id} className="glass-card rounded-lg p-3 mb-2 flex items-center gap-3">
+                    <Avatar char={m.avatar} size="sm" online={m.online} />
+                    <div className="flex-1">
+                      <div className="font-semibold text-white text-sm" style={{ fontFamily: '"Exo 2", sans-serif' }}>{m.name}</div>
+                      <div className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{m.car}</div>
+                    </div>
+                    <NeonBadge label={m.level} color={m.levelColor} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── SETTINGS SCREEN ──────────────────────────────────────────────────────────
+function SettingsScreen() {
+  const [notif, setNotif] = useState(true);
+  const [online, setOnline] = useState(true);
+  const [sound, setSound] = useState(false);
+
+  const sections = [
+    {
+      title: "Профиль", items: [
+        { icon: "User", label: "Редактировать профиль", value: "Александр Г." },
+        { icon: "Car", label: "Мой автомобиль", value: "BMW M3 G80" },
+        { icon: "Image", label: "Аватар", value: "Изменить" },
+      ]
+    },
+    {
+      title: "Приватность", items: [
+        { icon: "Bell", label: "Уведомления", toggle: true, val: notif, onToggle: () => setNotif(v => !v) },
+        { icon: "Eye", label: "Показывать онлайн", toggle: true, val: online, onToggle: () => setOnline(v => !v) },
+        { icon: "Volume2", label: "Звуки сообщений", toggle: true, val: sound, onToggle: () => setSound(v => !v) },
+      ]
+    },
+    {
+      title: "Клуб", items: [
+        { icon: "Users", label: "Управление клубом", value: "→" },
+        { icon: "Shield", label: "Правила клуба", value: "→" },
+        { icon: "Star", label: "Система рейтинга", value: "→" },
+      ]
+    },
+  ];
+
+  return (
+    <div className="flex flex-col h-full animate-fade-in">
+      <div className="px-4 pt-4 pb-3">
+        <h2 className="font-bold text-xl text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Настройки</h2>
+      </div>
+
+      <div className="px-4 mb-4">
+        <div className="glass-card rounded-xl p-4 flex items-center gap-4" style={{ border: "1px solid rgba(0,255,179,0.15)" }}>
+          <div className="w-16 h-16 rounded-full flex items-center justify-center font-bold text-2xl text-white"
+            style={{ fontFamily: '"Exo 2", sans-serif', background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "2px solid rgba(0,255,179,0.35)", boxShadow: "0 0 20px rgba(0,255,179,0.15)" }}>
+            А
+          </div>
+          <div>
+            <div className="font-bold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Александр Громов</div>
+            <div className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>Президент клуба</div>
+            <div className="mt-1"><NeonBadge label="Легенда" color="#ff6b00" /></div>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
+        {sections.map(section => (
+          <div key={section.title}>
+            <div className="text-xs font-semibold uppercase tracking-wider mb-2 px-1"
+              style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>
+              {section.title}
+            </div>
+            <div className="glass-card rounded-xl overflow-hidden">
+              {section.items.map((item: { icon: string; label: string; value?: string; toggle?: boolean; val?: boolean; onToggle?: () => void }, idx) => (
+                <div key={item.label}
+                  className="flex items-center gap-3 px-4 py-3.5"
+                  style={{ borderBottom: idx < section.items.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                    style={{ background: "rgba(0,255,179,0.08)", border: "1px solid rgba(0,255,179,0.15)" }}>
+                    <Icon name={item.icon} size={14} style={{ color: "var(--neon-green)" }} />
+                  </div>
+                  <span className="flex-1 text-white text-sm">{item.label}</span>
+                  {item.toggle ? (
+                    <button onClick={item.onToggle}
+                      className="relative w-11 h-6 rounded-full transition-all"
+                      style={{ background: item.val ? "var(--neon-green)" : "rgba(255,255,255,0.12)" }}>
+                      <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
+                        style={{ left: item.val ? "calc(100% - 22px)" : "2px", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
+                    </button>
+                  ) : (
+                    <span className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>{item.value}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        <button className="w-full rounded-xl py-3 flex items-center justify-center gap-2 text-sm transition-all"
+          style={{ fontFamily: '"Exo 2", sans-serif', color: "#ff4d4d", border: "1px solid rgba(255,77,77,0.25)", background: "rgba(255,77,77,0.05)" }}>
+          <Icon name="LogOut" size={16} />
+          Выйти из аккаунта
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+export default function Index() {
+  const [tab, setTab] = useState<Tab>("chats");
+
+  const navItems: { id: Tab; icon: string; label: string }[] = [
+    { id: "chats", icon: "MessageCircle", label: "Чаты" },
+    { id: "events", icon: "Calendar", label: "События" },
+    { id: "gallery", icon: "Image", label: "Галерея" },
+    { id: "members", icon: "Users", label: "Клуб" },
+    { id: "search", icon: "Search", label: "Поиск" },
+    { id: "settings", icon: "Settings", label: "Настройки" },
+  ];
+
+  const unread = chats.reduce((s, c) => s + c.unread, 0);
+
+  return (
+    <div className="flex items-center justify-center min-h-screen"
+      style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(0,255,179,0.04) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(0,212,255,0.04) 0%, transparent 60%), var(--bg-dark)" }}>
+      <div className="relative flex flex-col w-full max-w-sm h-screen max-h-[812px] overflow-hidden rounded-none sm:rounded-[36px]"
+        style={{ background: "var(--bg-dark)", border: "1px solid rgba(0,255,179,0.1)", boxShadow: "0 0 60px rgba(0,255,179,0.07), 0 0 120px rgba(0,212,255,0.04), 0 40px 100px rgba(0,0,0,0.6)" }}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0"
+          style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🏎️</span>
+            <span className="font-black text-base tracking-wider" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-green)", textShadow: "0 0 12px rgba(0,255,179,0.5)" }}>
+              MOTO<span style={{ color: "var(--neon-blue)" }}>CLUB</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <button className="relative">
+              <Icon name="Bell" size={20} style={{ color: "rgba(255,255,255,0.5)" }} />
+              {unread > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center font-bold"
+                  style={{ background: "var(--neon-green)", color: "var(--bg-dark)", fontSize: "9px" }}>
+                  {unread}
+                </span>
+              )}
+            </button>
+            <span className="w-2.5 h-2.5 rounded-full animate-pulse-neon"
+              style={{ background: "var(--neon-green)", boxShadow: "0 0 6px var(--neon-green)" }} />
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-hidden">
+          {tab === "chats" && <ChatsScreen />}
+          {tab === "events" && <EventsScreen />}
+          {tab === "gallery" && <GalleryScreen />}
+          {tab === "members" && <MembersScreen />}
+          {tab === "search" && <SearchScreen />}
+          {tab === "settings" && <SettingsScreen />}
+        </div>
+
+        {/* Bottom Navigation */}
+        <nav className="mobile-nav flex-shrink-0 flex items-center justify-around px-1 py-2">
+          {navItems.map(item => (
+            <button key={item.id} onClick={() => setTab(item.id)}
+              className="flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-xl transition-all relative">
+              <div className="relative">
+                <Icon name={item.icon} size={21}
+                  style={{ color: tab === item.id ? "var(--neon-green)" : "rgba(255,255,255,0.3)", filter: tab === item.id ? "drop-shadow(0 0 5px rgba(0,255,179,0.8))" : "none", transition: "all 0.2s ease" }} />
+                {item.id === "chats" && unread > 0 && tab !== "chats" && (
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold"
+                    style={{ background: "var(--neon-green)", color: "var(--bg-dark)", fontSize: "8px" }}>
+                    {unread}
+                  </span>
+                )}
+              </div>
+              <span style={{ fontFamily: '"Exo 2", sans-serif', fontSize: "9px", fontWeight: 500, color: tab === item.id ? "var(--neon-green)" : "rgba(255,255,255,0.3)", transition: "color 0.2s ease" }}>
+                {item.label}
+              </span>
+              {tab === item.id && (
+                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full"
+                  style={{ background: "var(--neon-green)", boxShadow: "0 0 6px var(--neon-green)" }} />
+              )}
+            </button>
+          ))}
+        </nav>
+      </div>
+    </div>
+  );
+}
