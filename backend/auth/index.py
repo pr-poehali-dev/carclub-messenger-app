@@ -53,6 +53,7 @@ def user_to_dict(row) -> dict:
         "level": row[4],
         "levelColor": row[5],
         "points": row[6],
+        "avatarUrl": row[7] if len(row) > 7 else None,
     }
 
 
@@ -91,20 +92,23 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(f"""
-            SELECT id, nickname, car, role, level, level_color, points
+            SELECT id, nickname, car, role, level, level_color, points, avatar_url
             FROM {SCHEMA}.users
             WHERE LOWER(nickname) = LOWER(%s) AND pin = %s
         """, (nickname, hash_pin(pin)))
         row = cur.fetchone()
-        cur.close()
-        conn.close()
-
         if not row:
+            cur.close()
+            conn.close()
             return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Неверный никнейм или PIN-код"})}
 
         user = user_to_dict(row)
         sid = secrets.token_hex(24)
         _sessions[sid] = user
+        cur.execute(f"INSERT INTO {SCHEMA}.sessions (session_id, user_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (sid, user["id"]))
+        conn.commit()
+        cur.close()
+        conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"session_id": sid, "user": user}, ensure_ascii=False)}
 
     # POST ?action=register — регистрация нового участника
@@ -129,7 +133,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(f"""
             INSERT INTO {SCHEMA}.users (nickname, pin, car, role, level, level_color, points)
             VALUES (%s, %s, %s, 'Участник', 'Новичок', '#00ffb3', 0)
-            RETURNING id, nickname, car, role, level, level_color, points
+            RETURNING id, nickname, car, role, level, level_color, points, avatar_url
         """, (nickname, hash_pin(pin), car))
         row = cur.fetchone()
         conn.commit()
@@ -139,6 +143,10 @@ def handler(event: dict, context) -> dict:
         user = user_to_dict(row)
         sid = secrets.token_hex(24)
         _sessions[sid] = user
+        cur.execute(f"INSERT INTO {SCHEMA}.sessions (session_id, user_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (sid, user["id"]))
+        conn.commit()
+        cur.close()
+        conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"session_id": sid, "user": user}, ensure_ascii=False)}
 
     return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}

@@ -1,0 +1,1 @@
+ALTER TABLE t_p76085414_carclub_messenger_ap.users ADD COLUMN avatar_url text DEFAULT NULL;

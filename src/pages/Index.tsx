@@ -126,6 +126,7 @@ const members: Member[] = [
 // ─── API ──────────────────────────────────────────────────────────────────────
 const API = "https://functions.poehali.dev/7f1b68b2-3be2-4063-bc44-6fdd024576b1";
 const AUTH_API = "https://functions.poehali.dev/a1192a6c-cacf-4b21-b110-e0a01c534f8d";
+const UPLOAD_AVATAR_API = "https://functions.poehali.dev/6b54dfba-6b17-4476-9ac2-f2563bb89adf";
 
 interface User {
   id: number;
@@ -135,6 +136,7 @@ interface User {
   level: string;
   levelColor: string;
   points: number;
+  avatarUrl?: string | null;
 }
 
 const SESSION_KEY = "motoclub_session";
@@ -762,17 +764,42 @@ function SearchScreen() {
 }
 
 // ─── SETTINGS SCREEN ──────────────────────────────────────────────────────────
-function SettingsScreen() {
+function SettingsScreen({ user, sessionId, onAvatarChange }: { user: User; sessionId: string; onAvatarChange: (url: string) => void }) {
   const [notif, setNotif] = useState(true);
   const [online, setOnline] = useState(true);
   const [sound, setSound] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarClick = () => fileInputRef.current?.click();
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(",")[1];
+      const res = await fetch(UPLOAD_AVATAR_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+        body: JSON.stringify({ image: base64, content_type: file.type }),
+      });
+      const data = await res.json();
+      setUploading(false);
+      if (res.ok && data.avatar_url) {
+        onAvatarChange(data.avatar_url);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
 
   const sections = [
     {
       title: "Профиль", items: [
-        { icon: "User", label: "Редактировать профиль", value: "Александр Г." },
-        { icon: "Car", label: "Мой автомобиль", value: "BMW M3 G80" },
-        { icon: "Image", label: "Аватар", value: "Изменить" },
+        { icon: "User", label: "Редактировать профиль", value: user.nickname },
+        { icon: "Car", label: "Мой автомобиль", value: user.car || "Не указан" },
       ]
     },
     {
@@ -799,14 +826,25 @@ function SettingsScreen() {
 
       <div className="px-4 mb-4">
         <div className="glass-card rounded-xl p-4 flex items-center gap-4" style={{ border: "1px solid rgba(0,255,179,0.15)" }}>
-          <div className="w-16 h-16 rounded-full flex items-center justify-center font-bold text-2xl text-white"
-            style={{ fontFamily: '"Exo 2", sans-serif', background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "2px solid rgba(0,255,179,0.35)", boxShadow: "0 0 20px rgba(0,255,179,0.15)" }}>
-            А
+          <div className="relative cursor-pointer" onClick={handleAvatarClick}>
+            <div className="w-16 h-16 rounded-full flex items-center justify-center font-bold text-2xl text-white overflow-hidden"
+              style={{ fontFamily: '"Exo 2", sans-serif', background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "2px solid rgba(0,255,179,0.35)", boxShadow: "0 0 20px rgba(0,255,179,0.15)" }}>
+              {user.avatarUrl
+                ? <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                : user.nickname[0].toUpperCase()}
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center"
+              style={{ background: uploading ? "rgba(0,255,179,0.3)" : "var(--neon-green)", boxShadow: "0 0 8px rgba(0,255,179,0.6)" }}>
+              {uploading
+                ? <div className="w-3 h-3 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,0,0,0.3)", borderTopColor: "#000" }} />
+                : <Icon name="Camera" size={13} style={{ color: "#000" }} />}
+            </div>
           </div>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
           <div>
-            <div className="font-bold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Александр Громов</div>
-            <div className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>Президент клуба</div>
-            <div className="mt-1"><NeonBadge label="Легенда" color="#ff6b00" /></div>
+            <div className="font-bold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>{user.nickname}</div>
+            <div className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>{user.role}</div>
+            <div className="mt-1"><NeonBadge label={user.level} color={user.levelColor} /></div>
           </div>
         </div>
       </div>
@@ -991,6 +1029,13 @@ export default function Index() {
     setSession({ user, session_id });
   };
 
+  const handleAvatarChange = (url: string) => {
+    if (!session) return;
+    const updated = { ...session, user: { ...session.user, avatarUrl: url } };
+    setSession(updated);
+    saveSession(updated);
+  };
+
   const WRAP = (
     <div className="flex items-center justify-center min-h-screen"
       style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(0,255,179,0.04) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(0,212,255,0.04) 0%, transparent 60%), var(--bg-dark)" }}>
@@ -1011,9 +1056,11 @@ export default function Index() {
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-1.5">
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white overflow-hidden"
                     style={{ background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "1px solid rgba(0,255,179,0.3)" }}>
-                    {session.user.nickname[0].toUpperCase()}
+                    {session.user.avatarUrl
+                      ? <img src={session.user.avatarUrl} alt="av" className="w-full h-full object-cover" />
+                      : session.user.nickname[0].toUpperCase()}
                   </div>
                 </div>
                 <button className="relative">
@@ -1037,7 +1084,7 @@ export default function Index() {
               {tab === "gallery" && <GalleryScreen />}
               {tab === "members" && <MembersScreen />}
               {tab === "search" && <SearchScreen />}
-              {tab === "settings" && <SettingsScreen />}
+              {tab === "settings" && <SettingsScreen user={session.user} sessionId={session.session_id} onAvatarChange={handleAvatarChange} />}
             </div>
 
             {/* Bottom Navigation */}

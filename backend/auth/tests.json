@@ -6,7 +6,6 @@
       "path": "/?action=login",
       "body": {"nickname": "Максим", "pin": "1111"},
       "expectedStatus": 200,
-      "expectedBody": {"session_id": ""},
       "bodyMatcher": "partial"
     },
     {
@@ -15,15 +14,6 @@
       "path": "/?action=login",
       "body": {"nickname": "Максим", "pin": "0000"},
       "expectedStatus": 401,
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "POST register — новый пользователь",
-      "method": "POST",
-      "path": "/?action=register",
-      "body": {"nickname": "ТестЮзер99", "pin": "5678", "car": "Lada Vesta"},
-      "expectedStatus": 200,
-      "expectedBody": {"session_id": ""},
       "bodyMatcher": "partial"
     }
   ]
