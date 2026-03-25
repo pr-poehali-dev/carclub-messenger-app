@@ -211,6 +211,22 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
     }).catch(() => {});
   }, []);
 
+  const playNotification = () => {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.setValueAtTime(880, ctx.currentTime);
+      o.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.1);
+      g.gain.setValueAtTime(0.3, ctx.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+      o.start(ctx.currentTime);
+      o.stop(ctx.currentTime + 0.3);
+    } catch (e) { void e; }
+  };
+
   const loadMessages = useCallback(async (chatId: number, after = 0) => {
     const data = await apiGetMessages(chatId, after, user.nickname);
     if (!Array.isArray(data)) return;
@@ -218,6 +234,8 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
       setMessages(data);
       lastIdRef.current = data.length > 0 ? data[data.length - 1].id : 0;
     } else if (data.length > 0) {
+      const incoming = data.filter(m => !m.out);
+      if (incoming.length > 0) playNotification();
       setMessages(prev => [...prev, ...data]);
       lastIdRef.current = data[data.length - 1].id;
     }
