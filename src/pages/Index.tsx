@@ -738,9 +738,9 @@ export default function Index() {
         <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
           <div className="flex items-center gap-2">
-            <span className="text-xl">🏎️</span>
+            <span className="text-xl">🏙️</span>
             <span className="font-black text-base tracking-wider" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-green)", textShadow: "0 0 12px rgba(0,255,179,0.5)" }}>
-              MOTO<span style={{ color: "var(--neon-blue)" }}>CLUB</span>
+              ПУЛЬС<span style={{ color: "var(--neon-blue)" }}> ГОРОДА</span>
             </span>
           </div>
           <div className="flex items-center gap-3">
