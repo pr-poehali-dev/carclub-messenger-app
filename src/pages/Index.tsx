@@ -311,7 +311,7 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
     }).catch(() => {});
   };
 
-  const now = () => new Date().toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" });
+  const now = () => new Date().toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Moscow" });
 
   const sendMessage = async () => {
     if (!msgText.trim() || !activeChat || sending) return;

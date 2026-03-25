@@ -26,7 +26,11 @@ def get_conn():
 def fmt_time(dt):
     if dt is None:
         return ""
-    return dt.strftime("%H:%M")
+    from datetime import timezone, timedelta
+    msk = timezone(timedelta(hours=3))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(msk).strftime("%H:%M")
 
 
 def get_user_id_from_session(session_id: str, conn):
