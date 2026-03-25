@@ -9,6 +9,9 @@ interface Message {
   text: string;
   time: string;
   out: boolean;
+  sender?: string;
+  type?: "text" | "image" | "voice" | "emoji";
+  mediaUrl?: string | null;
 }
 
 interface Chat {
@@ -180,11 +183,13 @@ async function apiGetMessages(chatId: number, after = 0): Promise<Message[]> {
   return res.json();
 }
 
-async function apiSendMessage(chatId: number, text: string): Promise<Message> {
+async function apiSendMessage(chatId: number, payload: {
+  text?: string; type?: string; media?: string; media_content_type?: string;
+}): Promise<Message> {
   const res = await fetch(`${API}?action=messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify({ chat_id: chatId, ...payload }),
   });
   return res.json();
 }
@@ -230,9 +235,16 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   const [chatMembersLoading, setChatMembersLoading] = useState(false);
   const [allMembers, setAllMembers] = useState<User[]>([]);
   const [memberSaving, setMemberSaving] = useState<number | null>(null);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastIdRef = useRef(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Загружаем список чатов из API
   useEffect(() => {
@@ -282,17 +294,76 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  const pushMessage = async (optimistic: Message, payload: Parameters<typeof apiSendMessage>[1]) => {
+    if (!activeChat) return;
+    setMessages(prev => [...prev, optimistic]);
+    setSending(true);
+    const saved = await apiSendMessage(activeChat.id, payload);
+    setMessages(prev => prev.map(m => m.id === optimistic.id ? { ...saved, out: true } : m));
+    lastIdRef.current = saved.id;
+    setSending(false);
+  };
+
+  const now = () => new Date().toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" });
+
   const sendMessage = async () => {
     if (!msgText.trim() || !activeChat || sending) return;
     const text = msgText.trim();
     setMsgText("");
-    setSending(true);
-    const optimistic: Message = { id: Date.now(), text, time: new Date().toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" }), out: true };
-    setMessages(prev => [...prev, optimistic]);
-    const saved = await apiSendMessage(activeChat.id, text);
-    setMessages(prev => prev.map(m => m.id === optimistic.id ? { ...saved, out: true } : m));
-    lastIdRef.current = saved.id;
-    setSending(false);
+    setShowEmoji(false);
+    await pushMessage({ id: Date.now(), text, time: now(), out: true, type: "text" }, { text, type: "text" });
+  };
+
+  const sendEmoji = async (emoji: string) => {
+    if (!activeChat || sending) return;
+    setShowEmoji(false);
+    await pushMessage({ id: Date.now(), text: emoji, time: now(), out: true, type: "emoji" }, { text: emoji, type: "emoji" });
+  };
+
+  const sendImage = async (file: File) => {
+    if (!activeChat || sending) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(",")[1];
+      const optimistic: Message = { id: Date.now(), text: "📷 Фото", time: now(), out: true, type: "image", mediaUrl: URL.createObjectURL(file) };
+      await pushMessage(optimistic, { type: "image", media: base64, media_content_type: file.type });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      mr.ondataavailable = e => audioChunksRef.current.push(e.data);
+      mr.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = (reader.result as string).split(",")[1];
+          const url = URL.createObjectURL(blob);
+          const optimistic: Message = { id: Date.now(), text: "🎤 Голосовое", time: now(), out: true, type: "voice", mediaUrl: url };
+          await pushMessage(optimistic, { type: "voice", media: base64, media_content_type: "audio/webm" });
+        };
+        reader.readAsDataURL(blob);
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setIsRecording(true);
+      setRecordingTime(0);
+      recordTimerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000);
+    } catch {
+      alert("Нет доступа к микрофону");
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+    setIsRecording(false);
+    setRecordingTime(0);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -488,35 +559,118 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
           )}
           {messages.map(m => (
             <div key={m.id} className={`flex ${m.out ? "justify-end" : "justify-start"} animate-fade-in`}>
-              <div className={`max-w-[75%] px-4 py-2.5 ${m.out ? "msg-out" : "msg-in"}`}>
-                {!m.out && m.sender && m.sender !== "me" && (
-                  <p className="text-xs font-semibold mb-1" style={{ color: "var(--neon-blue)" }}>{m.sender}</p>
-                )}
-                <p className="text-sm text-white">{m.text}</p>
-                <p className="text-xs mt-1 text-right" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
-              </div>
+              {m.type === "emoji" ? (
+                <div className={`flex flex-col ${m.out ? "items-end" : "items-start"}`}>
+                  <span style={{ fontSize: "2.5rem", lineHeight: 1 }}>{m.text}</span>
+                  <span className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>{m.time}</span>
+                </div>
+              ) : m.type === "image" && m.mediaUrl ? (
+                <div className={`max-w-[70%] ${m.out ? "msg-out" : "msg-in"} overflow-hidden p-1`}>
+                  {!m.out && m.sender && m.sender !== "me" && (
+                    <p className="text-xs font-semibold mb-1 px-2" style={{ color: "var(--neon-blue)" }}>{m.sender}</p>
+                  )}
+                  <img src={m.mediaUrl} alt="фото" className="rounded-xl w-full object-cover" style={{ maxHeight: 220 }} />
+                  <p className="text-xs mt-1 text-right px-2 pb-1" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
+                </div>
+              ) : m.type === "voice" && m.mediaUrl ? (
+                <div className={`max-w-[75%] px-3 py-2.5 ${m.out ? "msg-out" : "msg-in"}`}>
+                  {!m.out && m.sender && m.sender !== "me" && (
+                    <p className="text-xs font-semibold mb-1" style={{ color: "var(--neon-blue)" }}>{m.sender}</p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <span style={{ fontSize: "1.1rem" }}>🎤</span>
+                    <audio controls src={m.mediaUrl} className="h-8" style={{ maxWidth: 160, filter: "invert(0.8)" }} />
+                  </div>
+                  <p className="text-xs mt-1 text-right" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
+                </div>
+              ) : (
+                <div className={`max-w-[75%] px-4 py-2.5 ${m.out ? "msg-out" : "msg-in"}`}>
+                  {!m.out && m.sender && m.sender !== "me" && (
+                    <p className="text-xs font-semibold mb-1" style={{ color: "var(--neon-blue)" }}>{m.sender}</p>
+                  )}
+                  <p className="text-sm text-white">{m.text}</p>
+                  <p className="text-xs mt-1 text-right" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
+                </div>
+              )}
             </div>
           ))}
           <div ref={bottomRef} />
         </div>
 
-        <div className="px-4 py-3" style={{ borderTop: "1px solid rgba(0,255,179,0.12)" }}>
-          <div className="flex items-center gap-2">
-            <button style={{ color: "rgba(255,255,255,0.4)" }}>
-              <Icon name="Paperclip" size={20} />
+        {/* Эмодзи-пикер */}
+        {showEmoji && (
+          <div className="px-3 pb-2 animate-fade-in">
+            <div className="rounded-2xl p-3 grid grid-cols-8 gap-1"
+              style={{ background: "rgba(0,0,0,0.6)", border: "1px solid rgba(0,255,179,0.15)", backdropFilter: "blur(10px)" }}>
+              {["😀","😂","🥹","😍","🤩","😎","🥳","😅","😭","😡","🤔","👍","👎","❤️","🔥","💯",
+                "🏎️","⚡","🏁","🔧","🎯","💪","🙌","👏","🤝","✨","🎉","🚀"].map(e => (
+                <button key={e} onClick={() => sendEmoji(e)}
+                  className="text-xl p-1 rounded-lg hover:bg-white/10 transition-all text-center"
+                  style={{ lineHeight: 1.2 }}>{e}</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Запись голоса */}
+        {isRecording && (
+          <div className="px-4 py-2 flex items-center gap-3 animate-fade-in"
+            style={{ borderTop: "1px solid rgba(255,77,77,0.2)", background: "rgba(255,77,77,0.05)" }}>
+            <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: "#ff4d4d" }} />
+            <span className="text-sm flex-1" style={{ color: "#ff6b6b", fontFamily: '"Exo 2", sans-serif' }}>
+              Запись... {Math.floor(recordingTime / 60)}:{String(recordingTime % 60).padStart(2, "0")}
+            </span>
+            <button onClick={stopRecording}
+              className="px-3 py-1.5 rounded-xl text-sm font-semibold"
+              style={{ background: "#ff4d4d", color: "#fff", fontFamily: '"Exo 2", sans-serif' }}>
+              Отправить
             </button>
-            <div className="flex-1 flex items-center rounded-2xl px-4 py-2.5"
+            <button onClick={() => { mediaRecorderRef.current?.stop(); if (recordTimerRef.current) clearInterval(recordTimerRef.current); setIsRecording(false); setRecordingTime(0); audioChunksRef.current = []; }}
+              className="px-3 py-1.5 rounded-xl text-sm"
+              style={{ background: "rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.5)" }}>
+              ✕
+            </button>
+          </div>
+        )}
+
+        <div className="px-3 py-3" style={{ borderTop: "1px solid rgba(0,255,179,0.12)" }}>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) sendImage(f); e.target.value = ""; }} />
+          <div className="flex items-center gap-1.5">
+            {/* Картинка */}
+            <button onClick={() => fileInputRef.current?.click()}
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
+              <Icon name="Image" size={18} style={{ color: "rgba(255,255,255,0.5)" }} />
+            </button>
+            {/* Эмодзи */}
+            <button onClick={() => setShowEmoji(v => !v)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
+              style={{ background: showEmoji ? "rgba(0,255,179,0.1)" : "rgba(255,255,255,0.05)", border: `1px solid ${showEmoji ? "rgba(0,255,179,0.3)" : "rgba(255,255,255,0.1)"}` }}>
+              <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>😊</span>
+            </button>
+            {/* Ввод текста */}
+            <div className="flex-1 flex items-center rounded-2xl px-3 py-2"
               style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
               <input className="w-full bg-transparent text-sm text-white outline-none placeholder-gray-600"
                 placeholder="Сообщение..." value={msgText}
                 onChange={e => setMsgText(e.target.value)}
                 onKeyDown={handleKeyDown} />
             </div>
-            <button onClick={sendMessage} disabled={sending || !msgText.trim()}
-              className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
-              style={{ background: msgText ? "var(--neon-green)" : "rgba(0,255,179,0.1)", border: "1px solid rgba(0,255,179,0.3)", opacity: sending ? 0.6 : 1 }}>
-              <Icon name="Send" size={16} style={{ color: msgText ? "var(--bg-dark)" : "var(--neon-green)" }} />
-            </button>
+            {/* Голос / Отправить */}
+            {msgText.trim() ? (
+              <button onClick={sendMessage} disabled={sending}
+                className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+                style={{ background: "var(--neon-green)", opacity: sending ? 0.6 : 1 }}>
+                <Icon name="Send" size={16} style={{ color: "var(--bg-dark)" }} />
+              </button>
+            ) : (
+              <button onMouseDown={startRecording} onTouchStart={startRecording} disabled={isRecording}
+                className="w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all"
+                style={{ background: isRecording ? "rgba(255,77,77,0.2)" : "rgba(0,255,179,0.1)", border: "1px solid rgba(0,255,179,0.3)" }}>
+                <Icon name="Mic" size={16} style={{ color: isRecording ? "#ff4d4d" : "var(--neon-green)" }} />
+              </button>
+            )}
           </div>
         </div>
       </div>
