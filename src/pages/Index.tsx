@@ -167,11 +167,15 @@ async function apiCreateChat(name: string, avatar: string, isGroup = false, memb
 // ─── COMPONENTS ──────────────────────────────────────────────────────────────
 function Avatar({ char, size = "md", online }: { char: string; size?: "sm" | "md" | "lg"; online?: boolean }) {
   const sizes = { sm: "w-9 h-9 text-sm", md: "w-11 h-11 text-base", lg: "w-16 h-16 text-2xl" };
+  const isUrl = char && (char.startsWith("http") || char.startsWith("/"));
   return (
     <div className="relative flex-shrink-0">
-      <div className={`${sizes[size]} rounded-full flex items-center justify-center font-bold`}
+      <div className={`${sizes[size]} rounded-full flex items-center justify-center font-bold overflow-hidden`}
         style={{ fontFamily: '"Exo 2", sans-serif', background: "linear-gradient(135deg, rgba(0,255,179,0.15), rgba(0,212,255,0.1))", border: "1px solid rgba(0,255,179,0.25)" }}>
-        <span style={{ color: "white" }}>{char}</span>
+        {isUrl
+          ? <img src={char} alt="" className="w-full h-full object-cover" />
+          : <span style={{ color: "white" }}>{char}</span>
+        }
       </div>
       {online && (
         <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2"
