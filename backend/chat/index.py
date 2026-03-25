@@ -71,22 +71,29 @@ def handler(event: dict, context) -> dict:
         cur.execute(f"""
             SELECT c.id, c.name, c.avatar, c.is_group, c.is_private,
                    m.text AS last_msg, m.type AS last_type, m.created_at AS last_time,
-                   COUNT(m2.id) FILTER (WHERE m2.is_out = false) AS unread
+                   COUNT(m2.id) FILTER (WHERE m2.is_out = false) AS unread,
+                   other_u.nickname AS other_name, other_u.avatar_url AS other_avatar
             FROM {SCHEMA}.chats c
             LEFT JOIN LATERAL (
                 SELECT text, type, created_at FROM {SCHEMA}.messages
                 WHERE chat_id = c.id ORDER BY created_at DESC LIMIT 1
             ) m ON true
             LEFT JOIN {SCHEMA}.messages m2 ON m2.chat_id = c.id
+            LEFT JOIN LATERAL (
+                SELECT u.nickname, u.avatar_url FROM {SCHEMA}.chat_members cm2
+                JOIN {SCHEMA}.users u ON u.id = cm2.user_id
+                WHERE cm2.chat_id = c.id AND cm2.user_id != %s
+                LIMIT 1
+            ) other_u ON (c.is_group = false)
             WHERE c.is_archived = false
               AND (c.is_private = false
                OR EXISTS (
                    SELECT 1 FROM {SCHEMA}.chat_members cm
                    WHERE cm.chat_id = c.id AND cm.user_id = %s
                ))
-            GROUP BY c.id, c.name, c.avatar, c.is_group, c.is_private, m.text, m.type, m.created_at
+            GROUP BY c.id, c.name, c.avatar, c.is_group, c.is_private, m.text, m.type, m.created_at, other_u.nickname, other_u.avatar_url
             ORDER BY m.created_at DESC NULLS LAST
-        """, (user_id,))
+        """, (user_id, user_id))
         rows = cur.fetchall()
         cur.close()
         conn.close()
@@ -97,11 +104,18 @@ def handler(event: dict, context) -> dict:
             if msg_type == "emoji": return text
             return text or ""
 
-        chats = [
-            {"id": r[0], "name": r[1], "avatar": r[2], "isGroup": r[3], "isPrivate": r[4],
-             "lastMsg": last_msg_preview(r[5], r[6]), "time": fmt_time(r[7]), "unread": int(r[8] or 0)}
-            for r in rows
-        ]
+        chats = []
+        for r in rows:
+            is_group = r[3]
+            other_name = r[9]
+            other_avatar = r[10]
+            name = r[1] if is_group or not other_name else other_name
+            avatar = r[2] if is_group or not other_avatar else other_avatar
+            chats.append({
+                "id": r[0], "name": name, "avatar": avatar,
+                "isGroup": is_group, "isPrivate": r[4],
+                "lastMsg": last_msg_preview(r[5], r[6]), "time": fmt_time(r[7]), "unread": int(r[8] or 0)
+            })
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(chats, ensure_ascii=False)}
 
     # GET ?action=messages&chat_id=1[&after=42] — сообщения чата
