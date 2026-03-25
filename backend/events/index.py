@@ -1,6 +1,7 @@
 """
-События клуба: получение, создание, редактирование, удаление.
+События клуба: получение, создание, редактирование, удаление, участие.
 Создание/редактирование/удаление доступно только администраторам и основателям.
+PATCH ?action=join&id=N — записаться/отписаться от события (авторизованные).
 """
 import json
 import os
@@ -9,7 +10,7 @@ import psycopg2
 SCHEMA = "t_p76085414_carclub_messenger_ap"
 CORS = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, X-Session-Id",
 }
 
@@ -46,12 +47,15 @@ def handler(event: dict, context) -> dict:
 
     try:
         if method == "GET":
+            user_id = get_user_id(session_id, conn) if session_id else None
             cur = conn.cursor()
             cur.execute(f"""
-                SELECT id, title, date_text, location, members, tag, tag_color, emoji, description, created_by, created_at
-                FROM {SCHEMA}.events
-                ORDER BY id ASC
-            """)
+                SELECT e.id, e.title, e.date_text, e.location, e.members, e.tag, e.tag_color, e.emoji, e.description, e.created_by,
+                       CASE WHEN ep.user_id IS NOT NULL THEN true ELSE false END AS joined
+                FROM {SCHEMA}.events e
+                LEFT JOIN {SCHEMA}.event_participants ep ON ep.event_id = e.id AND ep.user_id = %s
+                ORDER BY e.id ASC
+            """, (user_id,))
             rows = cur.fetchall()
             cur.close()
             result = []
@@ -67,9 +71,37 @@ def handler(event: dict, context) -> dict:
                     "emoji": r[7],
                     "description": r[8] or "",
                     "createdBy": r[9],
+                    "joined": r[10],
                 })
             conn.close()
             return {"statusCode": 200, "headers": CORS, "body": json.dumps({"events": result})}
+
+        if method == "PATCH":
+            event_id = params.get("id")
+            if not event_id:
+                conn.close()
+                return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "id required"})}
+            user_id = get_user_id(session_id, conn)
+            if not user_id:
+                conn.close()
+                return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Unauthorized"})}
+            cur = conn.cursor()
+            cur.execute(f"SELECT 1 FROM {SCHEMA}.event_participants WHERE event_id = %s AND user_id = %s", (int(event_id), user_id))
+            already = cur.fetchone()
+            if already:
+                cur.execute(f"DELETE FROM {SCHEMA}.event_participants WHERE event_id = %s AND user_id = %s", (int(event_id), user_id))
+                cur.execute(f"UPDATE {SCHEMA}.events SET members = GREATEST(0, members - 1) WHERE id = %s RETURNING members", (int(event_id),))
+                new_members = cur.fetchone()[0]
+                joined = False
+            else:
+                cur.execute(f"INSERT INTO {SCHEMA}.event_participants (event_id, user_id) VALUES (%s, %s)", (int(event_id), user_id))
+                cur.execute(f"UPDATE {SCHEMA}.events SET members = members + 1 WHERE id = %s RETURNING members", (int(event_id),))
+                new_members = cur.fetchone()[0]
+                joined = True
+            conn.commit()
+            cur.close()
+            conn.close()
+            return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "joined": joined, "members": new_members})}
 
         if method == "POST":
             user_id = get_user_id(session_id, conn)

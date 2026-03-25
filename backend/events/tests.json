@@ -7,11 +7,17 @@
       "expectedStatus": 200
     },
     {
-      "name": "GET events list",
+      "name": "GET events list — публично",
       "method": "GET",
       "path": "/",
       "expectedStatus": 200,
-      "expectedStatus": 200
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "PATCH join — без сессии → 401",
+      "method": "PATCH",
+      "path": "/?id=1",
+      "expectedStatus": 401
     }
   ]
 }

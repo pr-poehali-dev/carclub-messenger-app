@@ -38,6 +38,7 @@ interface ClubEvent {
   emoji: string;
   description?: string;
   createdBy?: number | null;
+  joined?: boolean;
 }
 
 interface GalleryItem {
@@ -806,6 +807,7 @@ function EventsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [joining, setJoining] = useState<number | null>(null);
 
   const canAdmin = user.isAdmin || user.isFounder;
 
@@ -848,6 +850,17 @@ function EventsScreen({ user, sessionId }: { user: User; sessionId: string }) {
     await fetch(`${EVENTS_API}?id=${id}`, { method: "DELETE", headers: { "X-Session-Id": sessionId } });
     setDeleteId(null);
     loadEvents();
+  };
+
+  const handleJoin = async (ev: ClubEvent) => {
+    if (joining) return;
+    setJoining(ev.id);
+    const res = await fetch(`${EVENTS_API}?id=${ev.id}`, { method: "PATCH", headers: { "X-Session-Id": sessionId } });
+    const data = await res.json();
+    if (data.ok) {
+      setEvList(prev => prev.map(e => e.id === ev.id ? { ...e, joined: data.joined, members: data.members } : e));
+    }
+    setJoining(null);
   };
 
   const inputStyle = { background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)" };
@@ -961,9 +974,15 @@ function EventsScreen({ user, sessionId }: { user: User; sessionId: string }) {
                     <Icon name="Users" size={12} />
                     <span>{ev.members} участников</span>
                   </div>
-                  <button className="text-xs px-3 py-1 rounded-lg font-semibold transition-all"
-                    style={{ ...ff, background: `${ev.tagColor}18`, color: ev.tagColor, border: `1px solid ${ev.tagColor}35` }}>
-                    Участвовать
+                  <button
+                    onClick={() => handleJoin(ev)}
+                    disabled={joining === ev.id}
+                    className="text-xs px-3 py-1 rounded-lg font-semibold transition-all"
+                    style={ev.joined
+                      ? { ...ff, background: `${ev.tagColor}35`, color: ev.tagColor, border: `1px solid ${ev.tagColor}90` }
+                      : { ...ff, background: `${ev.tagColor}18`, color: ev.tagColor, border: `1px solid ${ev.tagColor}35` }
+                    }>
+                    {joining === ev.id ? "…" : ev.joined ? "✓ Участвую" : "Участвовать"}
                   </button>
                 </div>
               </div>
