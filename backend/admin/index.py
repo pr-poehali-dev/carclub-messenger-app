@@ -345,17 +345,13 @@ def handler(event: dict, context) -> dict:
             conn.close()
             return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id required"})}
         cur = conn.cursor()
-        cur.execute(f"UPDATE {SCHEMA}.messages SET text = '[удалено]' WHERE chat_id = %s", (int(chat_id),))
-        cur.execute(f"UPDATE {SCHEMA}.chats SET name = name WHERE id = %s RETURNING id", (int(chat_id),))
+        cur.execute(f"SELECT id FROM {SCHEMA}.chats WHERE id = %s", (int(chat_id),))
         row = cur.fetchone()
         if not row:
             cur.close()
             conn.close()
             return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Чат не найден"})}
-        # Помечаем чат как архивный через name-суффикс (физически не удаляем)
-        cur.execute(f"UPDATE {SCHEMA}.chats SET is_private = true WHERE id = %s AND NOT is_private", (int(chat_id),))
-        # Реально убираем из доступа — очищаем chat_members и ставим специальный флаг
-        cur.execute(f"UPDATE {SCHEMA}.chats SET avatar = '🗑️' WHERE id = %s", (int(chat_id),))
+        cur.execute(f"UPDATE {SCHEMA}.chats SET is_archived = true WHERE id = %s", (int(chat_id),))
         conn.commit()
         cur.close()
         conn.close()

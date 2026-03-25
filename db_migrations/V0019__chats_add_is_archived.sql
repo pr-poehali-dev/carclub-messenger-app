@@ -1,0 +1,1 @@
+ALTER TABLE t_p76085414_carclub_messenger_ap.chats ADD COLUMN IF NOT EXISTS is_archived BOOLEAN NOT NULL DEFAULT FALSE;

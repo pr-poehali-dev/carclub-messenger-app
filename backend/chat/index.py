@@ -74,11 +74,12 @@ def handler(event: dict, context) -> dict:
                 WHERE chat_id = c.id ORDER BY created_at DESC LIMIT 1
             ) m ON true
             LEFT JOIN {SCHEMA}.messages m2 ON m2.chat_id = c.id
-            WHERE c.is_private = false
+            WHERE c.is_archived = false
+              AND (c.is_private = false
                OR EXISTS (
                    SELECT 1 FROM {SCHEMA}.chat_members cm
                    WHERE cm.chat_id = c.id AND cm.user_id = %s
-               )
+               ))
             GROUP BY c.id, c.name, c.avatar, c.is_group, c.is_private, m.text, m.type, m.created_at
             ORDER BY m.created_at DESC NULLS LAST
         """, (user_id,))
