@@ -764,11 +764,20 @@ function SearchScreen() {
 }
 
 // ─── SETTINGS SCREEN ──────────────────────────────────────────────────────────
-function SettingsScreen({ user, sessionId, onAvatarChange }: { user: User; sessionId: string; onAvatarChange: (url: string) => void }) {
+function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
+  user: User; sessionId: string;
+  onAvatarChange: (url: string) => void;
+  onProfileUpdate: (updated: User) => void;
+}) {
   const [notif, setNotif] = useState(true);
   const [online, setOnline] = useState(true);
   const [sound, setSound] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editNickname, setEditNickname] = useState(user.nickname);
+  const [editCar, setEditCar] = useState(user.car || "");
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAvatarClick = () => fileInputRef.current?.click();
@@ -787,39 +796,89 @@ function SettingsScreen({ user, sessionId, onAvatarChange }: { user: User; sessi
       });
       const data = await res.json();
       setUploading(false);
-      if (res.ok && data.avatar_url) {
-        onAvatarChange(data.avatar_url);
-      }
+      if (res.ok && data.avatar_url) onAvatarChange(data.avatar_url);
     };
     reader.readAsDataURL(file);
     e.target.value = "";
   };
 
-  const sections = [
-    {
-      title: "Профиль", items: [
-        { icon: "User", label: "Редактировать профиль", value: user.nickname },
-        { icon: "Car", label: "Мой автомобиль", value: user.car || "Не указан" },
-      ]
-    },
-    {
-      title: "Приватность", items: [
-        { icon: "Bell", label: "Уведомления", toggle: true, val: notif, onToggle: () => setNotif(v => !v) },
-        { icon: "Eye", label: "Показывать онлайн", toggle: true, val: online, onToggle: () => setOnline(v => !v) },
-        { icon: "Volume2", label: "Звуки сообщений", toggle: true, val: sound, onToggle: () => setSound(v => !v) },
-      ]
-    },
-    {
-      title: "Клуб", items: [
-        { icon: "Users", label: "Управление клубом", value: "→" },
-        { icon: "Shield", label: "Правила клуба", value: "→" },
-        { icon: "Star", label: "Система рейтинга", value: "→" },
-      ]
-    },
+  const openEdit = () => {
+    setEditNickname(user.nickname);
+    setEditCar(user.car || "");
+    setEditError("");
+    setEditOpen(true);
+  };
+
+  const saveProfile = async () => {
+    if (!editNickname.trim()) return;
+    setEditLoading(true);
+    setEditError("");
+    const res = await fetch(`${AUTH_API}?action=update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+      body: JSON.stringify({ nickname: editNickname.trim(), car: editCar.trim() }),
+    });
+    const data = await res.json();
+    setEditLoading(false);
+    if (!res.ok) { setEditError(data.error || "Ошибка"); return; }
+    onProfileUpdate(data.user);
+    setEditOpen(false);
+  };
+
+  const privacyItems = [
+    { icon: "Bell", label: "Уведомления", toggle: true, val: notif, onToggle: () => setNotif(v => !v) },
+    { icon: "Eye", label: "Показывать онлайн", toggle: true, val: online, onToggle: () => setOnline(v => !v) },
+    { icon: "Volume2", label: "Звуки сообщений", toggle: true, val: sound, onToggle: () => setSound(v => !v) },
   ];
 
   return (
     <div className="flex flex-col h-full animate-fade-in">
+      {/* Модал редактирования профиля */}
+      {editOpen && (
+        <div className="absolute inset-0 z-50 flex items-end justify-center"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+          onClick={e => { if (e.target === e.currentTarget) setEditOpen(false); }}>
+          <div className="w-full max-w-sm rounded-t-3xl p-6 animate-fade-in"
+            style={{ background: "var(--bg-dark)", border: "1px solid rgba(0,255,179,0.15)", borderBottom: "none" }}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-bold text-lg text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Редактировать профиль</h3>
+              <button onClick={() => setEditOpen(false)}>
+                <Icon name="X" size={20} style={{ color: "rgba(255,255,255,0.5)" }} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs mb-1 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.5)" }}>Никнейм</label>
+                <input value={editNickname} onChange={e => setEditNickname(e.target.value)}
+                  className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }} />
+              </div>
+              <div>
+                <label className="text-xs mb-1 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.5)" }}>Автомобиль</label>
+                <input value={editCar} onChange={e => setEditCar(e.target.value)}
+                  className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }}
+                  placeholder="Марка и модель" />
+              </div>
+              {editError && (
+                <div className="rounded-xl px-4 py-2.5 text-sm"
+                  style={{ background: "rgba(255,77,77,0.1)", border: "1px solid rgba(255,77,77,0.3)", color: "#ff6b6b" }}>
+                  {editError}
+                </div>
+              )}
+              <button onClick={saveProfile} disabled={editLoading || !editNickname.trim()}
+                className="neon-btn-filled w-full rounded-xl py-3 font-semibold text-sm flex items-center justify-center gap-2 mt-2"
+                style={{ fontFamily: '"Exo 2", sans-serif', opacity: editLoading ? 0.7 : 1 }}>
+                {editLoading
+                  ? <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} />
+                  : <Icon name="Check" size={16} />}
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="px-4 pt-4 pb-3">
         <h2 className="font-bold text-xl text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Настройки</h2>
       </div>
@@ -841,46 +900,90 @@ function SettingsScreen({ user, sessionId, onAvatarChange }: { user: User; sessi
             </div>
           </div>
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-          <div>
-            <div className="font-bold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>{user.nickname}</div>
-            <div className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>{user.role}</div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-white truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{user.nickname}</div>
+            <div className="text-sm mt-0.5 truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{user.car || user.role}</div>
             <div className="mt-1"><NeonBadge label={user.level} color={user.levelColor} /></div>
           </div>
+          <button onClick={openEdit} className="flex-shrink-0 w-8 h-8 rounded-xl flex items-center justify-center transition-all"
+            style={{ background: "rgba(0,255,179,0.08)", border: "1px solid rgba(0,255,179,0.2)" }}>
+            <Icon name="Pencil" size={14} style={{ color: "var(--neon-green)" }} />
+          </button>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-4">
-        {sections.map(section => (
-          <div key={section.title}>
-            <div className="text-xs font-semibold uppercase tracking-wider mb-2 px-1"
-              style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>
-              {section.title}
-            </div>
-            <div className="glass-card rounded-xl overflow-hidden">
-              {section.items.map((item: { icon: string; label: string; value?: string; toggle?: boolean; val?: boolean; onToggle?: () => void }, idx) => (
-                <div key={item.label}
-                  className="flex items-center gap-3 px-4 py-3.5"
-                  style={{ borderBottom: idx < section.items.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
-                    style={{ background: "rgba(0,255,179,0.08)", border: "1px solid rgba(0,255,179,0.15)" }}>
-                    <Icon name={item.icon} size={14} style={{ color: "var(--neon-green)" }} />
-                  </div>
-                  <span className="flex-1 text-white text-sm">{item.label}</span>
-                  {item.toggle ? (
-                    <button onClick={item.onToggle}
-                      className="relative w-11 h-6 rounded-full transition-all"
-                      style={{ background: item.val ? "var(--neon-green)" : "rgba(255,255,255,0.12)" }}>
-                      <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
-                        style={{ left: item.val ? "calc(100% - 22px)" : "2px", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
-                    </button>
-                  ) : (
-                    <span className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>{item.value}</span>
-                  )}
-                </div>
-              ))}
-            </div>
+        {/* Профиль */}
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wider mb-2 px-1"
+            style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>Профиль</div>
+          <div className="glass-card rounded-xl overflow-hidden">
+            <button onClick={openEdit} className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: "rgba(0,255,179,0.08)", border: "1px solid rgba(0,255,179,0.15)" }}>
+                <Icon name="User" size={14} style={{ color: "var(--neon-green)" }} />
+              </div>
+              <span className="flex-1 text-white text-sm">Редактировать профиль</span>
+              <span className="text-sm truncate max-w-[100px]" style={{ color: "rgba(255,255,255,0.4)" }}>{user.nickname}</span>
+            </button>
+            <button onClick={openEdit} className="w-full flex items-center gap-3 px-4 py-3.5 text-left">
+              <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ background: "rgba(0,255,179,0.08)", border: "1px solid rgba(0,255,179,0.15)" }}>
+                <Icon name="Car" size={14} style={{ color: "var(--neon-green)" }} />
+              </div>
+              <span className="flex-1 text-white text-sm">Мой автомобиль</span>
+              <span className="text-sm truncate max-w-[100px]" style={{ color: "rgba(255,255,255,0.4)" }}>{user.car || "Не указан"}</span>
+            </button>
           </div>
-        ))}
+        </div>
+
+        {/* Приватность */}
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wider mb-2 px-1"
+            style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>Приватность</div>
+          <div className="glass-card rounded-xl overflow-hidden">
+            {privacyItems.map((item, idx) => (
+              <div key={item.label} className="flex items-center gap-3 px-4 py-3.5"
+                style={{ borderBottom: idx < privacyItems.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(0,255,179,0.08)", border: "1px solid rgba(0,255,179,0.15)" }}>
+                  <Icon name={item.icon} size={14} style={{ color: "var(--neon-green)" }} />
+                </div>
+                <span className="flex-1 text-white text-sm">{item.label}</span>
+                <button onClick={item.onToggle}
+                  className="relative w-11 h-6 rounded-full transition-all"
+                  style={{ background: item.val ? "var(--neon-green)" : "rgba(255,255,255,0.12)" }}>
+                  <span className="absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all"
+                    style={{ left: item.val ? "calc(100% - 22px)" : "2px", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Клуб */}
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wider mb-2 px-1"
+            style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>Клуб</div>
+          <div className="glass-card rounded-xl overflow-hidden">
+            {[
+              { icon: "Users", label: "Управление клубом" },
+              { icon: "Shield", label: "Правила клуба" },
+              { icon: "Star", label: "Система рейтинга" },
+            ].map((item, idx, arr) => (
+              <div key={item.label} className="flex items-center gap-3 px-4 py-3.5"
+                style={{ borderBottom: idx < arr.length - 1 ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(0,255,179,0.08)", border: "1px solid rgba(0,255,179,0.15)" }}>
+                  <Icon name={item.icon} size={14} style={{ color: "var(--neon-green)" }} />
+                </div>
+                <span className="flex-1 text-white text-sm">{item.label}</span>
+                <span className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>→</span>
+              </div>
+            ))}
+          </div>
+        </div>
 
         <button onClick={() => { clearSession(); window.location.reload(); }}
           className="w-full rounded-xl py-3 flex items-center justify-center gap-2 text-sm transition-all"
@@ -1036,6 +1139,13 @@ export default function Index() {
     saveSession(updated);
   };
 
+  const handleProfileUpdate = (updatedUser: User) => {
+    if (!session) return;
+    const updated = { ...session, user: { ...session.user, ...updatedUser } };
+    setSession(updated);
+    saveSession(updated);
+  };
+
   const WRAP = (
     <div className="flex items-center justify-center min-h-screen"
       style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(0,255,179,0.04) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(0,212,255,0.04) 0%, transparent 60%), var(--bg-dark)" }}>
@@ -1084,7 +1194,7 @@ export default function Index() {
               {tab === "gallery" && <GalleryScreen />}
               {tab === "members" && <MembersScreen />}
               {tab === "search" && <SearchScreen />}
-              {tab === "settings" && <SettingsScreen user={session.user} sessionId={session.session_id} onAvatarChange={handleAvatarChange} />}
+              {tab === "settings" && <SettingsScreen user={session.user} sessionId={session.session_id} onAvatarChange={handleAvatarChange} onProfileUpdate={handleProfileUpdate} />}
             </div>
 
             {/* Bottom Navigation */}

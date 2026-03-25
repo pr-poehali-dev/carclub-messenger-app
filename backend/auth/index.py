@@ -143,10 +143,60 @@ def handler(event: dict, context) -> dict:
         user = user_to_dict(row)
         sid = secrets.token_hex(24)
         _sessions[sid] = user
-        cur.execute(f"INSERT INTO {SCHEMA}.sessions (session_id, user_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (sid, user["id"]))
         conn.commit()
         cur.close()
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"session_id": sid, "user": user}, ensure_ascii=False)}
+
+    # POST ?action=update — обновить никнейм и/или автомобиль
+    if method == "POST" and action == "update":
+        if not session_id:
+            return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Требуется авторизация"})}
+        user = _sessions.get(session_id)
+        if not user:
+            # попробуем найти в БД
+            conn = get_conn()
+            cur = conn.cursor()
+            cur.execute(f"SELECT user_id FROM {SCHEMA}.sessions WHERE session_id = %s", (session_id,))
+            row = cur.fetchone()
+            if not row:
+                cur.close()
+                conn.close()
+                return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Сессия не найдена"})}
+            user_id = row[0]
+        else:
+            user_id = user["id"]
+            conn = get_conn()
+            cur = conn.cursor()
+
+        body = json.loads(event.get("body") or "{}")
+        new_nickname = (body.get("nickname") or "").strip()
+        new_car = (body.get("car") or "").strip()
+
+        if not new_nickname:
+            cur.close()
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Никнейм не может быть пустым"})}
+
+        # проверяем уникальность никнейма (если изменился)
+        cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE LOWER(nickname) = LOWER(%s) AND id != %s", (new_nickname, user_id))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return {"statusCode": 409, "headers": CORS, "body": json.dumps({"error": "Никнейм уже занят"})}
+
+        cur.execute(f"""
+            UPDATE {SCHEMA}.users SET nickname = %s, car = %s WHERE id = %s
+            RETURNING id, nickname, car, role, level, level_color, points, avatar_url
+        """, (new_nickname, new_car, user_id))
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        updated_user = user_to_dict(row)
+        if session_id in _sessions:
+            _sessions[session_id] = updated_user
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"user": updated_user}, ensure_ascii=False)}
 
     return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
