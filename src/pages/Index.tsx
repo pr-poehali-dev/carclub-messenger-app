@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
@@ -123,6 +123,28 @@ const members: Member[] = [
   { id: 5, name: "Кирилл Зайцев", car: "Toyota Supra A90", avatar: "К", level: "Новичок", levelColor: "#00ffb3", points: 1240, online: true, role: "Участник" },
 ];
 
+// ─── API ──────────────────────────────────────────────────────────────────────
+const API = "https://functions.poehali.dev/7f1b68b2-3be2-4063-bc44-6fdd024576b1";
+
+async function apiGetChats(): Promise<Chat[]> {
+  const res = await fetch(`${API}?action=chats`);
+  return res.json();
+}
+
+async function apiGetMessages(chatId: number, after = 0): Promise<Message[]> {
+  const res = await fetch(`${API}?action=messages&chat_id=${chatId}&after=${after}`);
+  return res.json();
+}
+
+async function apiSendMessage(chatId: number, text: string): Promise<Message> {
+  const res = await fetch(`${API}?action=messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text }),
+  });
+  return res.json();
+}
+
 // ─── COMPONENTS ──────────────────────────────────────────────────────────────
 function Avatar({ char, size = "md", online }: { char: string; size?: "sm" | "md" | "lg"; online?: boolean }) {
   const sizes = { sm: "w-9 h-9 text-sm", md: "w-11 h-11 text-base", lg: "w-16 h-16 text-2xl" };
@@ -150,22 +172,92 @@ function NeonBadge({ label, color }: { label: string; color: string }) {
 
 // ─── CHATS SCREEN ─────────────────────────────────────────────────────────────
 function ChatsScreen() {
+  const [chatList, setChatList] = useState<Chat[]>(chats);
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [msgText, setMsgText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const lastIdRef = useRef(0);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Загружаем список чатов из API
+  useEffect(() => {
+    apiGetChats().then(data => {
+      if (Array.isArray(data) && data.length > 0) setChatList(data);
+    }).catch(() => {});
+  }, []);
+
+  const loadMessages = useCallback(async (chatId: number, after = 0) => {
+    const data = await apiGetMessages(chatId, after);
+    if (!Array.isArray(data)) return;
+    if (after === 0) {
+      setMessages(data);
+      lastIdRef.current = data.length > 0 ? data[data.length - 1].id : 0;
+    } else if (data.length > 0) {
+      setMessages(prev => [...prev, ...data]);
+      lastIdRef.current = data[data.length - 1].id;
+    }
+  }, []);
+
+  // Открываем чат — загружаем сообщения и запускаем поллинг
+  const openChat = useCallback(async (chat: Chat) => {
+    setLoading(true);
+    setMessages([]);
+    lastIdRef.current = 0;
+    setActiveChat(chat);
+    await loadMessages(chat.id, 0);
+    setLoading(false);
+    pollRef.current = setInterval(() => {
+      loadMessages(chat.id, lastIdRef.current);
+    }, 3000);
+  }, [loadMessages]);
+
+  // Закрываем чат — останавливаем поллинг
+  const closeChat = useCallback(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setActiveChat(null);
+    setMessages([]);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, []);
+
+  // Скролл вниз при новых сообщениях
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const sendMessage = async () => {
+    if (!msgText.trim() || !activeChat || sending) return;
+    const text = msgText.trim();
+    setMsgText("");
+    setSending(true);
+    const optimistic: Message = { id: Date.now(), text, time: new Date().toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" }), out: true };
+    setMessages(prev => [...prev, optimistic]);
+    const saved = await apiSendMessage(activeChat.id, text);
+    setMessages(prev => prev.map(m => m.id === optimistic.id ? { ...saved, out: true } : m));
+    lastIdRef.current = saved.id;
+    setSending(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  };
 
   if (activeChat) {
     return (
       <div className="flex flex-col h-full animate-fade-in">
         <div className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: "1px solid rgba(0,255,179,0.12)" }}>
-          <button onClick={() => setActiveChat(null)} className="transition-colors" style={{ color: "rgba(255,255,255,0.5)" }}>
+          <button onClick={closeChat} className="transition-colors" style={{ color: "rgba(255,255,255,0.5)" }}>
             <Icon name="ChevronLeft" size={22} />
           </button>
           <Avatar char={activeChat.avatar} online={activeChat.online} />
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{activeChat.name}</div>
-            <div className="text-xs" style={{ color: activeChat.online ? "var(--neon-green)" : "rgba(255,255,255,0.4)" }}>
-              {activeChat.online ? "онлайн" : "не в сети"}
-            </div>
+            <div className="text-xs" style={{ color: "var(--neon-green)" }}>онлайн</div>
           </div>
           <button className="transition-colors" style={{ color: "rgba(255,255,255,0.5)" }}>
             <Icon name="Phone" size={18} />
@@ -176,14 +268,23 @@ function ChatsScreen() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-          {activeChat.messages.map(m => (
+          {loading && (
+            <div className="flex justify-center py-4">
+              <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "rgba(0,255,179,0.4)", borderTopColor: "transparent" }} />
+            </div>
+          )}
+          {messages.map(m => (
             <div key={m.id} className={`flex ${m.out ? "justify-end" : "justify-start"} animate-fade-in`}>
               <div className={`max-w-[75%] px-4 py-2.5 ${m.out ? "msg-out" : "msg-in"}`}>
+                {!m.out && m.sender && m.sender !== "me" && (
+                  <p className="text-xs font-semibold mb-1" style={{ color: "var(--neon-blue)" }}>{m.sender}</p>
+                )}
                 <p className="text-sm text-white">{m.text}</p>
                 <p className="text-xs mt-1 text-right" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
               </div>
             </div>
           ))}
+          <div ref={bottomRef} />
         </div>
 
         <div className="px-4 py-3" style={{ borderTop: "1px solid rgba(0,255,179,0.12)" }}>
@@ -194,10 +295,13 @@ function ChatsScreen() {
             <div className="flex-1 flex items-center rounded-2xl px-4 py-2.5"
               style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
               <input className="w-full bg-transparent text-sm text-white outline-none placeholder-gray-600"
-                placeholder="Сообщение..." value={msgText} onChange={e => setMsgText(e.target.value)} />
+                placeholder="Сообщение..." value={msgText}
+                onChange={e => setMsgText(e.target.value)}
+                onKeyDown={handleKeyDown} />
             </div>
-            <button className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
-              style={{ background: msgText ? "var(--neon-green)" : "rgba(0,255,179,0.1)", border: "1px solid rgba(0,255,179,0.3)" }}>
+            <button onClick={sendMessage} disabled={sending || !msgText.trim()}
+              className="w-10 h-10 rounded-full flex items-center justify-center transition-all"
+              style={{ background: msgText ? "var(--neon-green)" : "rgba(0,255,179,0.1)", border: "1px solid rgba(0,255,179,0.3)", opacity: sending ? 0.6 : 1 }}>
               <Icon name="Send" size={16} style={{ color: msgText ? "var(--bg-dark)" : "var(--neon-green)" }} />
             </button>
           </div>
@@ -218,8 +322,8 @@ function ChatsScreen() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {chats.map(chat => (
-          <button key={chat.id} onClick={() => setActiveChat(chat)}
+        {chatList.map(chat => (
+          <button key={chat.id} onClick={() => openChat(chat)}
             className="w-full flex items-center gap-3 px-4 py-3 transition-all text-left"
             style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
             <Avatar char={chat.avatar} online={chat.online} />

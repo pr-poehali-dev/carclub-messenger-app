@@ -1,0 +1,27 @@
+{
+  "tests": [
+    {
+      "name": "GET ?action=chats — список чатов",
+      "method": "GET",
+      "path": "/?action=chats",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET ?action=messages&chat_id=1 — сообщения чата",
+      "method": "GET",
+      "path": "/?action=messages&chat_id=1",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST ?action=messages — отправка сообщения",
+      "method": "POST",
+      "path": "/?action=messages",
+      "body": {"chat_id": 1, "text": "Тест сообщение"},
+      "expectedStatus": 200,
+      "expectedBody": {"out": true},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
