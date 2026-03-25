@@ -52,6 +52,41 @@ def handler(event: dict, context) -> dict:
 
     conn = get_conn()
 
+    # ── GET ?action=invite_code — получить текущий код (только основатель)
+    if method == "GET" and action == "invite_code":
+        user_id = get_user_id(session_id, conn)
+        _, is_founder = get_user_rights(user_id, conn) if user_id else (False, False)
+        if not is_founder:
+            conn.close()
+            return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "Только для основателя"})}
+        cur = conn.cursor()
+        cur.execute(f"SELECT code FROM {SCHEMA}.invite_code ORDER BY id DESC LIMIT 1")
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"code": row[0] if row else ""}, ensure_ascii=False)}
+
+    # ── POST ?action=set_invite_code — изменить код (только основатель)
+    if method == "POST" and action == "set_invite_code":
+        user_id = get_user_id(session_id, conn)
+        _, is_founder = get_user_rights(user_id, conn) if user_id else (False, False)
+        if not is_founder:
+            conn.close()
+            return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "Только для основателя"})}
+        body = json.loads(event.get("body") or "{}")
+        new_code = (body.get("code") or "").strip().upper()
+        if len(new_code) < 4:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Код должен быть минимум 4 символа"})}
+        cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.invite_code SET code = %s, updated_at = now(), updated_by = %s", (new_code, user_id))
+        if cur.rowcount == 0:
+            cur.execute(f"INSERT INTO {SCHEMA}.invite_code (code, updated_by) VALUES (%s, %s)", (new_code, user_id))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"code": new_code})}
+
     # ── GET ?action=rules — получить правила клуба (доступно всем)
     if method == "GET" and action == "rules":
         cur = conn.cursor()

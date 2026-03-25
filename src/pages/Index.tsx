@@ -165,10 +165,10 @@ async function apiLogin(nickname: string, pin: string) {
   return { ok: res.ok, data: await res.json() };
 }
 
-async function apiRegister(nickname: string, pin: string, car: string) {
+async function apiRegister(nickname: string, pin: string, car: string, inviteCode: string) {
   const res = await fetch(`${AUTH_API}?action=register`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nickname, pin, car }),
+    body: JSON.stringify({ nickname, pin, car, invite_code: inviteCode }),
   });
   return { ok: res.ok, data: await res.json() };
 }
@@ -1372,7 +1372,37 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
   const [sound, setSound] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [panel, setPanel] = useState<"rules" | "rating" | "manage" | null>(null);
+  const [panel, setPanel] = useState<"rules" | "rating" | "manage" | "invite" | null>(null);
+
+  // ── Код приглашения ──
+  const [inviteCodeVal, setInviteCodeVal] = useState("");
+  const [inviteCodeLoading, setInviteCodeLoading] = useState(false);
+  const [inviteCodeSaving, setInviteCodeSaving] = useState(false);
+  const [inviteCodeSaved, setInviteCodeSaved] = useState(false);
+
+  const openInviteCode = async () => {
+    setPanel("invite");
+    setInviteCodeLoading(true);
+    const res = await fetch(`${ADMIN_API}?action=invite_code`, {
+      headers: { "X-Session-Id": sessionId },
+    });
+    const d = await res.json();
+    setInviteCodeVal(d.code || "");
+    setInviteCodeLoading(false);
+  };
+
+  const saveInviteCode = async () => {
+    if (!inviteCodeVal.trim() || inviteCodeVal.trim().length < 4) return;
+    setInviteCodeSaving(true);
+    await fetch(`${ADMIN_API}?action=set_invite_code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+      body: JSON.stringify({ code: inviteCodeVal.trim() }),
+    });
+    setInviteCodeSaving(false);
+    setInviteCodeSaved(true);
+    setTimeout(() => setInviteCodeSaved(false), 2500);
+  };
 
   // ── Правила клуба ──
   const [rules, setRules] = useState("");
@@ -1734,7 +1764,8 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
               <span className="flex-1 text-white text-sm">Правила клуба</span>
               <span className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>→</span>
             </button>
-            <button onClick={openRating} className="w-full flex items-center gap-3 px-4 py-3.5 text-left">
+            <button onClick={openRating} className="w-full flex items-center gap-3 px-4 py-3.5 text-left"
+              style={{ borderBottom: user.isFounder ? "1px solid rgba(255,255,255,0.05)" : "none" }}>
               <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
                 style={{ background: "rgba(0,255,179,0.08)", border: "1px solid rgba(0,255,179,0.15)" }}>
                 <Icon name="Star" size={14} style={{ color: "var(--neon-green)" }} />
@@ -1743,6 +1774,18 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
               {user.isAdmin && <span className="text-xs px-2 py-0.5 rounded-full font-semibold mr-2" style={{ background: "rgba(0,255,179,0.1)", color: "var(--neon-green)", border: "1px solid rgba(0,255,179,0.2)" }}>Адм</span>}
               <span className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>→</span>
             </button>
+            {user.isFounder && (
+              <button onClick={openInviteCode} className="w-full flex items-center gap-3 px-4 py-3.5 text-left">
+                <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(255,107,0,0.1)", border: "1px solid rgba(255,107,0,0.25)" }}>
+                  <Icon name="Key" size={14} style={{ color: "#ff6b00" }} />
+                </div>
+                <span className="flex-1 text-white text-sm">Код приглашения</span>
+                <span className="text-xs px-2 py-0.5 rounded-full font-semibold mr-2"
+                  style={{ background: "rgba(255,107,0,0.12)", color: "#ff6b00", border: "1px solid rgba(255,107,0,0.25)" }}>Основатель</span>
+                <span className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>→</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1834,6 +1877,61 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
                 )}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Панель: Код приглашения (только для основателя) ── */}
+      {panel === "invite" && user.isFounder && (
+        <div className="absolute inset-0 z-50 flex flex-col animate-fade-in"
+          style={{ background: "var(--bg-dark)" }}>
+          <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: "1px solid rgba(255,107,0,0.2)" }}>
+            <button onClick={() => setPanel(null)}><Icon name="ChevronLeft" size={22} style={{ color: "rgba(255,255,255,0.6)" }} /></button>
+            <h3 className="font-bold text-lg text-white flex-1" style={{ fontFamily: '"Exo 2", sans-serif' }}>Код приглашения</h3>
+          </div>
+          <div className="flex-1 p-5 flex flex-col gap-5">
+            <div className="glass-card rounded-2xl p-4" style={{ border: "1px solid rgba(255,107,0,0.2)" }}>
+              <p className="text-xs mb-3" style={{ color: "rgba(255,255,255,0.5)", lineHeight: 1.6 }}>
+                Этот код нужно сообщать участникам для регистрации. Без него зарегистрироваться невозможно. После смены старый код перестаёт работать.
+              </p>
+              {inviteCodeLoading ? (
+                <div className="flex justify-center py-6">
+                  <div className="w-5 h-5 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(255,107,0,0.3)", borderTopColor: "#ff6b00" }} />
+                </div>
+              ) : (
+                <>
+                  <div className="mb-2">
+                    <label className="text-xs mb-1.5 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.45)" }}>Текущий код</label>
+                    <div className="flex items-center gap-2">
+                      <input value={inviteCodeVal} onChange={e => setInviteCodeVal(e.target.value.toUpperCase())}
+                        className="flex-1 rounded-xl px-4 py-3 text-lg font-mono text-white outline-none tracking-widest"
+                        style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,107,0,0.3)" }}
+                        placeholder="MOTOCLUB2026"
+                        onKeyDown={e => e.key === "Enter" && saveInviteCode()} />
+                    </div>
+                    <p className="text-xs mt-1.5" style={{ color: "rgba(255,255,255,0.3)" }}>Минимум 4 символа, только латиница и цифры</p>
+                  </div>
+
+                  {inviteCodeSaved && (
+                    <div className="text-xs mb-3 px-3 py-2 rounded-xl flex items-center gap-2"
+                      style={{ background: "rgba(0,255,179,0.08)", border: "1px solid rgba(0,255,179,0.2)", color: "var(--neon-green)" }}>
+                      <Icon name="Check" size={13} />
+                      Код успешно сохранён
+                    </div>
+                  )}
+
+                  <button onClick={saveInviteCode}
+                    disabled={inviteCodeSaving || !inviteCodeVal.trim() || inviteCodeVal.trim().length < 4}
+                    className="w-full rounded-xl py-3 text-sm font-semibold flex items-center justify-center gap-2 transition-all"
+                    style={{ fontFamily: '"Exo 2", sans-serif', background: "rgba(255,107,0,0.15)", border: "1px solid rgba(255,107,0,0.35)", color: "#ff6b00", opacity: inviteCodeSaving ? 0.7 : 1 }}>
+                    {inviteCodeSaving
+                      ? <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(255,107,0,0.3)", borderTopColor: "#ff6b00" }} />
+                      : <Icon name="Save" size={15} />}
+                    Сохранить новый код
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -2032,16 +2130,18 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, sid: string) => void }
   const [nickname, setNickname] = useState("");
   const [pin, setPin] = useState("");
   const [car, setCar] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
     if (!nickname.trim() || !pin.trim()) return;
+    if (mode === "register" && !inviteCode.trim()) { setError("Введите код приглашения"); return; }
     setLoading(true);
     setError("");
     const { ok, data } = mode === "login"
       ? await apiLogin(nickname.trim(), pin.trim())
-      : await apiRegister(nickname.trim(), pin.trim(), car.trim());
+      : await apiRegister(nickname.trim(), pin.trim(), car.trim(), inviteCode.trim());
     setLoading(false);
     if (!ok) { setError(data.error || "Ошибка"); return; }
     saveSession({ session_id: data.session_id, user: data.user });
@@ -2085,13 +2185,25 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, sid: string) => void }
         </div>
 
         {mode === "register" && (
-          <div>
-            <label className="text-xs mb-1 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.5)" }}>Автомобиль</label>
-            <input value={car} onChange={e => setCar(e.target.value)} onKeyDown={handleKey}
-              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none transition-all"
-              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }}
-              placeholder="Марка и модель" />
-          </div>
+          <>
+            <div>
+              <label className="text-xs mb-1 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.5)" }}>Автомобиль</label>
+              <input value={car} onChange={e => setCar(e.target.value)} onKeyDown={handleKey}
+                className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none transition-all"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }}
+                placeholder="Марка и модель" />
+            </div>
+            <div>
+              <label className="text-xs mb-1 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.5)" }}>
+                Код приглашения <span style={{ color: "#ff6b6b" }}>*</span>
+              </label>
+              <input value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} onKeyDown={handleKey}
+                className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none tracking-widest font-mono"
+                style={{ background: "rgba(255,255,255,0.05)", border: `1px solid ${inviteCode ? "rgba(0,255,179,0.35)" : "rgba(0,255,179,0.2)"}` }}
+                placeholder="XXXXXXXX" />
+              <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.35)" }}>Получи код у администратора клуба</p>
+            </div>
+          </>
         )}
 
         <div>

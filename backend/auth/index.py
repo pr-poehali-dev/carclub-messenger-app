@@ -119,10 +119,21 @@ def handler(event: dict, context) -> dict:
         nickname = (body.get("nickname") or "").strip()
         pin = (body.get("pin") or "").strip()
         car = (body.get("car") or "").strip()
+        invite = (body.get("invite_code") or "").strip()
         if not nickname or not pin:
             return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "nickname and pin required"})}
         if len(pin) < 4:
             return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "PIN должен быть минимум 4 цифры"})}
+
+        # Проверяем код-инвайт
+        conn_check = get_conn()
+        cur_check = conn_check.cursor()
+        cur_check.execute(f"SELECT code FROM {SCHEMA}.invite_code ORDER BY id DESC LIMIT 1")
+        code_row = cur_check.fetchone()
+        cur_check.close()
+        conn_check.close()
+        if not code_row or invite.upper() != code_row[0].upper():
+            return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "Неверный код приглашения"})}
 
         conn = get_conn()
         cur = conn.cursor()
