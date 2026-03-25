@@ -88,6 +88,7 @@ const AUTH_API = "https://functions.poehali.dev/a1192a6c-cacf-4b21-b110-e0a01c53
 const UPLOAD_AVATAR_API = "https://functions.poehali.dev/6b54dfba-6b17-4476-9ac2-f2563bb89adf";
 const ADMIN_API = "https://functions.poehali.dev/fd18bf34-6c49-4fab-83c5-fb58dc050170";
 const GALLERY_API = "https://functions.poehali.dev/bd3184a0-efb5-4842-84d5-9f4e3c45aa67";
+const PUSH_API = "https://functions.poehali.dev/8ccad4d2-a7fe-4991-a983-f680cb3012c6";
 
 interface User {
   id: number;
@@ -283,6 +284,15 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
     setMessages(prev => prev.map(m => m.id === optimistic.id ? { ...saved, out: true } : m));
     lastIdRef.current = saved.id;
     setSending(false);
+    fetch(`${PUSH_API}?action=send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sender: user.nickname,
+        title: `${user.nickname} • ${activeChat.name}`,
+        message: optimistic.type === "image" ? "📷 Фото" : optimistic.type === "voice" ? "🎤 Голосовое" : optimistic.text,
+      }),
+    }).catch(() => {});
   };
 
   const now = () => new Date().toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" });
@@ -2358,8 +2368,30 @@ export default function Index() {
 
   const unread = chats.reduce((s, c) => s + c.unread, 0);
 
+  const subscribeToPush = async (session_id: string) => {
+    try {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") return;
+      const reg = await navigator.serviceWorker.ready;
+      const vapidRes = await fetch(`${PUSH_API}?action=vapid_key`);
+      const { public_key } = await vapidRes.json();
+      if (!public_key) return;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: public_key,
+      });
+      await fetch(`${PUSH_API}?action=subscribe`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Id": session_id },
+        body: JSON.stringify(sub.toJSON()),
+      });
+    } catch { /* тихо игнорируем */ }
+  };
+
   const handleLogin = (user: User, session_id: string) => {
     setSession({ user, session_id });
+    subscribeToPush(session_id);
   };
 
   const handleAvatarChange = (url: string) => {
@@ -2375,6 +2407,11 @@ export default function Index() {
     setSession(updated);
     saveSession(updated);
   };
+
+  useEffect(() => {
+    if (session) subscribeToPush(session.session_id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const WRAP = (
     <div className="flex items-center justify-center min-h-screen"

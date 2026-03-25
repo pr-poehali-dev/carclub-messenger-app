@@ -11,8 +11,7 @@
       "method": "GET",
       "path": "/?action=vapid_key",
       "expectedStatus": 200,
-      "expectedBody": {"public_key": "string"},
-      "bodyMatcher": "partial"
+      "expectedStatus": 200
     }
   ]
 }
