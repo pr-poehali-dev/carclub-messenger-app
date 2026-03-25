@@ -59,68 +59,68 @@ interface Member {
 // ─── MOCK DATA ────────────────────────────────────────────────────────────────
 const chats: Chat[] = [
   {
-    id: 1, name: "🏎️ Общий чат клуба", avatar: "🏁", lastMsg: "Едем в воскресенье!", time: "14:32",
+    id: 1, name: "🏙️ Общий чат района", avatar: "🌆", lastMsg: "Кто едет на фестиваль?", time: "14:32",
     unread: 5, online: true, isGroup: true,
     messages: [
-      { id: 1, text: "Всем привет! Едем в воскресенье на трек?", time: "14:28", out: false },
-      { id: 2, text: "Я точно буду! Уже подготовил резину 🏎️", time: "14:30", out: true },
-      { id: 3, text: "Едем в воскресенье!", time: "14:32", out: false },
+      { id: 1, text: "Привет всем! Кто идёт на фестиваль уличной еды в субботу?", time: "14:28", out: false },
+      { id: 2, text: "Я буду! Встречаемся у главного входа в 12:00 🎉", time: "14:30", out: true },
+      { id: 3, text: "Кто едет на фестиваль?", time: "14:32", out: false },
     ]
   },
   {
-    id: 2, name: "Максим Рублёв", avatar: "М", lastMsg: "Когда встреча?", time: "12:15",
+    id: 2, name: "Максим Рублёв", avatar: "М", lastMsg: "Когда собираемся?", time: "12:15",
     unread: 1, online: true, isGroup: false,
     messages: [
-      { id: 1, text: "Привет! Когда встреча клуба?", time: "12:10", out: false },
-      { id: 2, text: "В субботу в 10:00 на парковке ТЦ", time: "12:15", out: true },
+      { id: 1, text: "Привет! Когда следующая встреча сообщества?", time: "12:10", out: false },
+      { id: 2, text: "В субботу в 10:00 в парке у фонтана 🌳", time: "12:15", out: true },
     ]
   },
   {
-    id: 3, name: "🔥 Дрифт-команда", avatar: "🔥", lastMsg: "Новые фото в галерее!", time: "вчера",
+    id: 3, name: "🎨 Арт-квартал", avatar: "🎨", lastMsg: "Новые граффити на Северной!", time: "вчера",
     unread: 0, online: false, isGroup: true,
     messages: [
-      { id: 1, text: "Новые фото в галерее!", time: "вчера", out: false },
+      { id: 1, text: "Новые граффити на Северной!", time: "вчера", out: false },
     ]
   },
   {
-    id: 4, name: "Анна Соколова", avatar: "А", lastMsg: "Спасибо за помощь 🙏", time: "вчера",
+    id: 4, name: "Анна Соколова", avatar: "А", lastMsg: "Спасибо за организацию 🙏", time: "вчера",
     unread: 0, online: false, isGroup: false,
     messages: [
-      { id: 1, text: "Спасибо за помощь 🙏", time: "вчера", out: false },
+      { id: 1, text: "Спасибо за организацию 🙏", time: "вчера", out: false },
     ]
   },
   {
-    id: 5, name: "⚡ Электрокары", avatar: "⚡", lastMsg: "Тест-драйв в пятницу", time: "пн",
+    id: 5, name: "⚡ Активисты города", avatar: "⚡", lastMsg: "Субботник в пятницу!", time: "пн",
     unread: 2, online: false, isGroup: true,
     messages: [
-      { id: 1, text: "Тест-драйв в пятницу, кто участвует?", time: "пн", out: false },
+      { id: 1, text: "Субботник в пятницу, кто присоединится?", time: "пн", out: false },
     ]
   },
 ];
 
 const events: ClubEvent[] = [
-  { id: 1, title: "Ночной трек-день", date: "30 марта, 20:00", location: "Moscow Raceway", members: 24, tag: "Гонки", tagColor: "#00ffb3", emoji: "🏁" },
-  { id: 2, title: "Встреча клуба", date: "5 апреля, 10:00", location: "Лужники, парковка А", members: 47, tag: "Встреча", tagColor: "#00d4ff", emoji: "🤝" },
-  { id: 3, title: "Дрифт-шоу 2026", date: "12 апреля, 14:00", location: "Крокус Экспо", members: 112, tag: "Шоу", tagColor: "#bf00ff", emoji: "🔥" },
-  { id: 4, title: "Сезонное ТО", date: "20 апреля, 9:00", location: "СТО «Мотор»", members: 18, tag: "Сервис", tagColor: "#ff6b00", emoji: "🔧" },
-  { id: 5, title: "Фотосессия суперкаров", date: "27 апреля, 11:00", location: "Воробьёвы горы", members: 31, tag: "Фото", tagColor: "#00ffb3", emoji: "📸" },
+  { id: 1, title: "Ночной кинофестиваль", date: "30 марта, 20:00", location: "Парк Горького", members: 234, tag: "Кино", tagColor: "#00ffb3", emoji: "🎬" },
+  { id: 2, title: "Фестиваль уличной еды", date: "5 апреля, 11:00", location: "Красная площадь", members: 847, tag: "Еда", tagColor: "#00d4ff", emoji: "🍜" },
+  { id: 3, title: "Граффити-марафон", date: "12 апреля, 14:00", location: "Арт-квартал, ул. Северная", members: 62, tag: "Арт", tagColor: "#bf00ff", emoji: "🎨" },
+  { id: 4, title: "Субботник в парке", date: "20 апреля, 9:00", location: "Парк Победы", members: 118, tag: "Эко", tagColor: "#ff6b00", emoji: "🌳" },
+  { id: 5, title: "Ночная фотопрогулка", date: "27 апреля, 22:00", location: "Воробьёвы горы", members: 41, tag: "Фото", tagColor: "#00ffb3", emoji: "📸" },
 ];
 
 const gallery: GalleryItem[] = [
-  { id: 1, emoji: "🏎️", title: "Moscow Raceway Night", event: "Трек-день", likes: 84, bg: "from-green-900/40 to-cyan-900/40" },
-  { id: 2, emoji: "🔥", title: "Дрифт под дождём", event: "Дрифт-шоу", likes: 127, isVideo: true, bg: "from-purple-900/40 to-pink-900/40" },
-  { id: 3, emoji: "🌆", title: "Ночной город", event: "Фотосессия", likes: 56, bg: "from-blue-900/40 to-indigo-900/40" },
-  { id: 4, emoji: "⚡", title: "Tesla vs Porsche", event: "Тест-драйв", likes: 93, bg: "from-yellow-900/40 to-orange-900/40" },
-  { id: 5, emoji: "🏁", title: "Старт гонки", event: "Трек-день", likes: 201, isVideo: true, bg: "from-red-900/40 to-rose-900/40" },
-  { id: 6, emoji: "🛞", title: "Смена резины", event: "Встреча", likes: 38, bg: "from-slate-900/40 to-gray-900/40" },
+  { id: 1, emoji: "🌃", title: "Огни большого города", event: "Фотопрогулка", likes: 284, bg: "from-green-900/40 to-cyan-900/40" },
+  { id: 2, emoji: "🎨", title: "Граффити-фестиваль", event: "Арт-марафон", likes: 327, isVideo: true, bg: "from-purple-900/40 to-pink-900/40" },
+  { id: 3, emoji: "🌆", title: "Закат над городом", event: "Фотопрогулка", likes: 156, bg: "from-blue-900/40 to-indigo-900/40" },
+  { id: 4, emoji: "🎭", title: "Уличный театр", event: "Фестиваль", likes: 193, bg: "from-yellow-900/40 to-orange-900/40" },
+  { id: 5, emoji: "🎆", title: "Салют на Новый год", event: "Праздник", likes: 501, isVideo: true, bg: "from-red-900/40 to-rose-900/40" },
+  { id: 6, emoji: "🌸", title: "Весна в парке", event: "Субботник", likes: 88, bg: "from-slate-900/40 to-gray-900/40" },
 ];
 
 const members: Member[] = [
-  { id: 1, name: "Александр Громов", car: "BMW M3 G80", avatar: "А", level: "Легенда", levelColor: "#ff6b00", points: 9850, online: true, role: "Президент клуба" },
-  { id: 2, name: "Максим Рублёв", car: "Nissan GT-R R35", avatar: "М", level: "Эксперт", levelColor: "#bf00ff", points: 7420, online: true, role: "Капитан дрифт-команды" },
-  { id: 3, name: "Анна Соколова", car: "Porsche 911 GT3", avatar: "А", level: "Профи", levelColor: "#00d4ff", points: 5130, online: false, role: "Организатор событий" },
-  { id: 4, name: "Дмитрий Орлов", car: "Mercedes AMG GT", avatar: "Д", level: "Профи", levelColor: "#00d4ff", points: 4890, online: false, role: "Механик" },
-  { id: 5, name: "Кирилл Зайцев", car: "Toyota Supra A90", avatar: "К", level: "Новичок", levelColor: "#00ffb3", points: 1240, online: true, role: "Участник" },
+  { id: 1, name: "Александр Громов", car: "Центральный район", avatar: "А", level: "Легенда", levelColor: "#ff6b00", points: 9850, online: true, role: "Основатель сообщества" },
+  { id: 2, name: "Максим Рублёв", car: "Северный район", avatar: "М", level: "Эксперт", levelColor: "#bf00ff", points: 7420, online: true, role: "Организатор событий" },
+  { id: 3, name: "Анна Соколова", car: "Арт-квартал", avatar: "А", level: "Профи", levelColor: "#00d4ff", points: 5130, online: false, role: "Куратор галереи" },
+  { id: 4, name: "Дмитрий Орлов", car: "Южный район", avatar: "Д", level: "Профи", levelColor: "#00d4ff", points: 4890, online: false, role: "Эко-активист" },
+  { id: 5, name: "Кирилл Зайцев", car: "Новый район", avatar: "К", level: "Новичок", levelColor: "#00ffb3", points: 1240, online: true, role: "Участник" },
 ];
 
 // ─── COMPONENTS ──────────────────────────────────────────────────────────────
@@ -460,9 +460,9 @@ function MembersScreen() {
           </div>
 
           <div className="glass-card rounded-xl p-4 mb-4">
-            <div className="text-xs mb-3 font-semibold uppercase tracking-wider" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>Автомобиль</div>
+            <div className="text-xs mb-3 font-semibold uppercase tracking-wider" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.4)" }}>Район</div>
             <div className="flex items-center gap-3">
-              <span className="text-2xl">🚗</span>
+              <span className="text-2xl">📍</span>
               <span className="font-semibold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>{selected.car}</span>
             </div>
           </div>
@@ -488,7 +488,7 @@ function MembersScreen() {
     <div className="flex flex-col h-full animate-fade-in">
       <div className="px-4 pt-4 pb-3">
         <h2 className="font-bold text-xl text-white mb-1" style={{ fontFamily: '"Exo 2", sans-serif' }}>Участники</h2>
-        <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{members.length} членов клуба</p>
+        <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>{members.length} участника сообщества</p>
       </div>
 
       <div className="px-4 mb-3">
@@ -630,7 +630,7 @@ function SettingsScreen() {
     {
       title: "Профиль", items: [
         { icon: "User", label: "Редактировать профиль", value: "Александр Г." },
-        { icon: "Car", label: "Мой автомобиль", value: "BMW M3 G80" },
+        { icon: "MapPin", label: "Мой район", value: "Центральный" },
         { icon: "Image", label: "Аватар", value: "Изменить" },
       ]
     },
@@ -642,9 +642,9 @@ function SettingsScreen() {
       ]
     },
     {
-      title: "Клуб", items: [
-        { icon: "Users", label: "Управление клубом", value: "→" },
-        { icon: "Shield", label: "Правила клуба", value: "→" },
+      title: "Сообщество", items: [
+        { icon: "Users", label: "Управление сообществом", value: "→" },
+        { icon: "Shield", label: "Правила сообщества", value: "→" },
         { icon: "Star", label: "Система рейтинга", value: "→" },
       ]
     },
@@ -664,7 +664,7 @@ function SettingsScreen() {
           </div>
           <div>
             <div className="font-bold text-white" style={{ fontFamily: '"Exo 2", sans-serif' }}>Александр Громов</div>
-            <div className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>Президент клуба</div>
+            <div className="text-sm mt-0.5" style={{ color: "rgba(255,255,255,0.5)" }}>Основатель сообщества</div>
             <div className="mt-1"><NeonBadge label="Легенда" color="#ff6b00" /></div>
           </div>
         </div>
