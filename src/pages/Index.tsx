@@ -2210,7 +2210,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, sid: string) => void }
         <img src="https://cdn.poehali.dev/projects/63e708a6-7a81-48b1-9e5a-267986d3465b/bucket/869e4556-4d7c-40f3-9bdb-b119c62778b8.jpg"
           alt="Пульс Города" className="mx-auto animate-float"
           style={{ width: 140, height: 140, objectFit: "contain", filter: "drop-shadow(0 0 16px rgba(0,255,179,0.25))" }} />
-        <p className="text-xs mt-2" style={{ color: "rgba(255,255,255,0.4)" }}>Мессенджер автоклуба · Севастополь</p>
+        <p className="text-xs mt-2" style={{ color: "rgba(255,255,255,0.4)" }}>Мессенджер Пульс Города · Севастополь</p>
       </div>
 
       {/* Переключатель */}
