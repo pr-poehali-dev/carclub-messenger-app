@@ -103,12 +103,13 @@ def handler(event: dict, context) -> dict:
     if method == "GET" and action == "messages":
         chat_id = params.get("chat_id")
         after = params.get("after", "0")
+        me = params.get("me", "")
         if not chat_id:
             return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id required"})}
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(f"""
-            SELECT id, text, sender, is_out, created_at, type, media_url
+            SELECT id, text, sender, created_at, type, media_url
             FROM {SCHEMA}.messages
             WHERE chat_id = %s AND id > %s
             ORDER BY created_at ASC
@@ -116,8 +117,8 @@ def handler(event: dict, context) -> dict:
         rows = cur.fetchall()
         cur.close()
         conn.close()
-        msgs = [{"id": r[0], "text": r[1], "sender": r[2], "out": r[3], "time": fmt_time(r[4]),
-                 "type": r[5] or "text", "mediaUrl": r[6]} for r in rows]
+        msgs = [{"id": r[0], "text": r[1], "sender": r[2], "out": (r[2] == me) if me else False,
+                 "time": fmt_time(r[3]), "type": r[4] or "text", "mediaUrl": r[5]} for r in rows]
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(msgs, ensure_ascii=False)}
 
     # POST ?action=messages — отправить сообщение (text/image/voice/emoji)

@@ -135,8 +135,8 @@ async function apiGetChats(sessionId?: string): Promise<Chat[]> {
   return res.json();
 }
 
-async function apiGetMessages(chatId: number, after = 0): Promise<Message[]> {
-  const res = await fetch(`${API}?action=messages&chat_id=${chatId}&after=${after}`);
+async function apiGetMessages(chatId: number, after = 0, myNickname = ""): Promise<Message[]> {
+  const res = await fetch(`${API}?action=messages&chat_id=${chatId}&after=${after}&me=${encodeURIComponent(myNickname)}`);
   return res.json();
 }
 
@@ -212,7 +212,7 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   }, []);
 
   const loadMessages = useCallback(async (chatId: number, after = 0) => {
-    const data = await apiGetMessages(chatId, after);
+    const data = await apiGetMessages(chatId, after, user.nickname);
     if (!Array.isArray(data)) return;
     if (after === 0) {
       setMessages(data);
