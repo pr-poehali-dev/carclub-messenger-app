@@ -17,23 +17,6 @@ CORS = {
 
 # Сессии в памяти инстанса
 _sessions: dict = {}
-_pins_initialized = False
-
-
-def ensure_pins_hashed():
-    demo = [("Александр", "1234"), ("Максим", "1111"), ("Анна", "2222"),
-            ("Дмитрий", "3333"), ("Кирилл", "4444")]
-    conn = get_conn()
-    cur = conn.cursor()
-    for nickname, pin in demo:
-        h = hash_pin(pin)
-        cur.execute(f"""
-            UPDATE {SCHEMA}.users SET pin = %s
-            WHERE LOWER(nickname) = LOWER(%s) AND pin != %s
-        """, (h, nickname, h))
-    conn.commit()
-    cur.close()
-    conn.close()
 
 
 def get_conn():
@@ -60,11 +43,6 @@ def user_to_dict(row) -> dict:
 
 
 def handler(event: dict, context) -> dict:
-    global _pins_initialized
-    if not _pins_initialized:
-        ensure_pins_hashed()
-        _pins_initialized = True
-
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": CORS, "body": ""}
 

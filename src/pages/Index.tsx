@@ -61,46 +61,7 @@ interface Member {
 }
 
 // ─── MOCK DATA ────────────────────────────────────────────────────────────────
-const chats: Chat[] = [
-  {
-    id: 1, name: "🏎️ Общий чат клуба", avatar: "🏁", lastMsg: "Едем в воскресенье!", time: "14:32",
-    unread: 5, online: true, isGroup: true,
-    messages: [
-      { id: 1, text: "Всем привет! Едем в воскресенье на трек?", time: "14:28", out: false },
-      { id: 2, text: "Я точно буду! Уже подготовил резину 🏎️", time: "14:30", out: true },
-      { id: 3, text: "Едем в воскресенье!", time: "14:32", out: false },
-    ]
-  },
-  {
-    id: 2, name: "Максим Рублёв", avatar: "М", lastMsg: "Когда встреча?", time: "12:15",
-    unread: 1, online: true, isGroup: false,
-    messages: [
-      { id: 1, text: "Привет! Когда встреча клуба?", time: "12:10", out: false },
-      { id: 2, text: "В субботу в 10:00 на парковке ТЦ", time: "12:15", out: true },
-    ]
-  },
-  {
-    id: 3, name: "🔥 Дрифт-команда", avatar: "🔥", lastMsg: "Новые фото в галерее!", time: "вчера",
-    unread: 0, online: false, isGroup: true,
-    messages: [
-      { id: 1, text: "Новые фото в галерее!", time: "вчера", out: false },
-    ]
-  },
-  {
-    id: 4, name: "Анна Соколова", avatar: "А", lastMsg: "Спасибо за помощь 🙏", time: "вчера",
-    unread: 0, online: false, isGroup: false,
-    messages: [
-      { id: 1, text: "Спасибо за помощь 🙏", time: "вчера", out: false },
-    ]
-  },
-  {
-    id: 5, name: "⚡ Электрокары", avatar: "⚡", lastMsg: "Тест-драйв в пятницу", time: "пн",
-    unread: 2, online: false, isGroup: true,
-    messages: [
-      { id: 1, text: "Тест-драйв в пятницу, кто участвует?", time: "пн", out: false },
-    ]
-  },
-];
+const chats: Chat[] = [];
 
 const events: ClubEvent[] = [
   { id: 1, title: "Ночной трек-день", date: "30 марта, 20:00", location: "Moscow Raceway", members: 24, tag: "Гонки", tagColor: "#00ffb3", emoji: "🏁" },
@@ -2307,20 +2268,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, sid: string) => void }
         </button>
       </div>
 
-      {mode === "login" && (
-        <div className="mt-6 glass-card rounded-xl p-3 w-full" style={{ border: "1px solid rgba(255,255,255,0.06)" }}>
-          <p className="text-xs text-center mb-2" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.35)" }}>Демо-аккаунты</p>
-          <div className="grid grid-cols-2 gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
-            {[["Александр", "1234"], ["Максим", "1111"], ["Анна", "2222"], ["Кирилл", "4444"]].map(([n, p]) => (
-              <button key={n} onClick={() => { setNickname(n); setPin(p); }}
-                className="text-left px-2 py-1.5 rounded-lg transition-all"
-                style={{ background: "rgba(0,255,179,0.05)", border: "1px solid rgba(0,255,179,0.1)", color: "var(--neon-green)" }}>
-                {n} / {p}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }
