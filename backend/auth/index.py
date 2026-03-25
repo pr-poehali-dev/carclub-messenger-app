@@ -1,0 +1,144 @@
+"""
+Авторизация членов автоклуба по никнейму и PIN-коду.
+action=login — вход, action=register — регистрация, action=me — профиль по session_id
+"""
+import json
+import os
+import hashlib
+import secrets
+import psycopg2
+
+SCHEMA = "t_p76085414_carclub_messenger_ap"
+CORS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Session-Id",
+}
+
+# Сессии в памяти инстанса
+_sessions: dict = {}
+_pins_initialized = False
+
+
+def ensure_pins_hashed():
+    demo = [("Александр", "1234"), ("Максим", "1111"), ("Анна", "2222"),
+            ("Дмитрий", "3333"), ("Кирилл", "4444")]
+    conn = get_conn()
+    cur = conn.cursor()
+    for nickname, pin in demo:
+        h = hash_pin(pin)
+        cur.execute(f"""
+            UPDATE {SCHEMA}.users SET pin = %s
+            WHERE LOWER(nickname) = LOWER(%s) AND pin != %s
+        """, (h, nickname, h))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def get_conn():
+    return psycopg2.connect(os.environ["DATABASE_URL"])
+
+
+def hash_pin(pin: str) -> str:
+    return hashlib.sha256(pin.encode()).hexdigest()
+
+
+def user_to_dict(row) -> dict:
+    return {
+        "id": row[0],
+        "nickname": row[1],
+        "car": row[2],
+        "role": row[3],
+        "level": row[4],
+        "levelColor": row[5],
+        "points": row[6],
+    }
+
+
+def handler(event: dict, context) -> dict:
+    global _pins_initialized
+    if not _pins_initialized:
+        ensure_pins_hashed()
+        _pins_initialized = True
+
+    if event.get("httpMethod") == "OPTIONS":
+        return {"statusCode": 200, "headers": CORS, "body": ""}
+
+    method = event.get("httpMethod", "GET")
+    params = event.get("queryStringParameters") or {}
+    action = params.get("action", "")
+    headers = event.get("headers") or {}
+    session_id = headers.get("X-Session-Id") or headers.get("x-session-id") or ""
+
+    # GET ?action=me — получить текущего пользователя по session_id
+    if method == "GET" and action == "me":
+        if not session_id:
+            return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "no session"})}
+        user = _sessions.get(session_id)
+        if not user:
+            return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "session expired"})}
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps(user, ensure_ascii=False)}
+
+    # POST ?action=login — вход по никнейму + PIN
+    if method == "POST" and action == "login":
+        body = json.loads(event.get("body") or "{}")
+        nickname = (body.get("nickname") or "").strip()
+        pin = (body.get("pin") or "").strip()
+        if not nickname or not pin:
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "nickname and pin required"})}
+
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT id, nickname, car, role, level, level_color, points
+            FROM {SCHEMA}.users
+            WHERE LOWER(nickname) = LOWER(%s) AND pin = %s
+        """, (nickname, hash_pin(pin)))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if not row:
+            return {"statusCode": 401, "headers": CORS, "body": json.dumps({"error": "Неверный никнейм или PIN-код"})}
+
+        user = user_to_dict(row)
+        sid = secrets.token_hex(24)
+        _sessions[sid] = user
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"session_id": sid, "user": user}, ensure_ascii=False)}
+
+    # POST ?action=register — регистрация нового участника
+    if method == "POST" and action == "register":
+        body = json.loads(event.get("body") or "{}")
+        nickname = (body.get("nickname") or "").strip()
+        pin = (body.get("pin") or "").strip()
+        car = (body.get("car") or "").strip()
+        if not nickname or not pin:
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "nickname and pin required"})}
+        if len(pin) < 4:
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "PIN должен быть минимум 4 цифры"})}
+
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE LOWER(nickname) = LOWER(%s)", (nickname,))
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return {"statusCode": 409, "headers": CORS, "body": json.dumps({"error": "Никнейм уже занят"})}
+
+        cur.execute(f"""
+            INSERT INTO {SCHEMA}.users (nickname, pin, car, role, level, level_color, points)
+            VALUES (%s, %s, %s, 'Участник', 'Новичок', '#00ffb3', 0)
+            RETURNING id, nickname, car, role, level, level_color, points
+        """, (nickname, hash_pin(pin), car))
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        user = user_to_dict(row)
+        sid = secrets.token_hex(24)
+        _sessions[sid] = user
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"session_id": sid, "user": user}, ensure_ascii=False)}
+
+    return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}

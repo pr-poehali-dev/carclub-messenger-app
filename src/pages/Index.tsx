@@ -125,6 +125,43 @@ const members: Member[] = [
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 const API = "https://functions.poehali.dev/7f1b68b2-3be2-4063-bc44-6fdd024576b1";
+const AUTH_API = "https://functions.poehali.dev/a1192a6c-cacf-4b21-b110-e0a01c534f8d";
+
+interface User {
+  id: number;
+  nickname: string;
+  car: string;
+  role: string;
+  level: string;
+  levelColor: string;
+  points: number;
+}
+
+const SESSION_KEY = "motoclub_session";
+
+function getSession(): { session_id: string; user: User } | null {
+  try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
+}
+function saveSession(data: { session_id: string; user: User }) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+}
+function clearSession() { localStorage.removeItem(SESSION_KEY); }
+
+async function apiLogin(nickname: string, pin: string) {
+  const res = await fetch(`${AUTH_API}?action=login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nickname, pin }),
+  });
+  return { ok: res.ok, data: await res.json() };
+}
+
+async function apiRegister(nickname: string, pin: string, car: string) {
+  const res = await fetch(`${AUTH_API}?action=register`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nickname, pin, car }),
+  });
+  return { ok: res.ok, data: await res.json() };
+}
 
 async function apiGetChats(): Promise<Chat[]> {
   const res = await fetch(`${API}?action=chats`);
@@ -807,7 +844,8 @@ function SettingsScreen() {
           </div>
         ))}
 
-        <button className="w-full rounded-xl py-3 flex items-center justify-center gap-2 text-sm transition-all"
+        <button onClick={() => { clearSession(); window.location.reload(); }}
+          className="w-full rounded-xl py-3 flex items-center justify-center gap-2 text-sm transition-all"
           style={{ fontFamily: '"Exo 2", sans-serif', color: "#ff4d4d", border: "1px solid rgba(255,77,77,0.25)", background: "rgba(255,77,77,0.05)" }}>
           <Icon name="LogOut" size={16} />
           Выйти из аккаунта
@@ -817,9 +855,126 @@ function SettingsScreen() {
   );
 }
 
+// ─── LOGIN SCREEN ─────────────────────────────────────────────────────────────
+function LoginScreen({ onLogin }: { onLogin: (user: User, sid: string) => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [nickname, setNickname] = useState("");
+  const [pin, setPin] = useState("");
+  const [car, setCar] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    if (!nickname.trim() || !pin.trim()) return;
+    setLoading(true);
+    setError("");
+    const { ok, data } = mode === "login"
+      ? await apiLogin(nickname.trim(), pin.trim())
+      : await apiRegister(nickname.trim(), pin.trim(), car.trim());
+    setLoading(false);
+    if (!ok) { setError(data.error || "Ошибка"); return; }
+    saveSession({ session_id: data.session_id, user: data.user });
+    onLogin(data.user, data.session_id);
+  };
+
+  const handleKey = (e: React.KeyboardEvent) => { if (e.key === "Enter") submit(); };
+
+  return (
+    <div className="flex flex-col items-center justify-center h-full px-6 animate-fade-in"
+      style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(0,255,179,0.06) 0%, transparent 70%)" }}>
+
+      <div className="mb-8 text-center">
+        <div className="text-5xl mb-4 animate-float">🏎️</div>
+        <h1 className="font-black text-2xl tracking-wider mb-1"
+          style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-green)", textShadow: "0 0 16px rgba(0,255,179,0.5)" }}>
+          ПУЛЬС<span style={{ color: "var(--neon-blue)" }}> ГОРОДА</span>
+        </h1>
+        <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>Мессенджер автоклуба</p>
+      </div>
+
+      {/* Переключатель */}
+      <div className="flex w-full mb-6 rounded-xl overflow-hidden"
+        style={{ border: "1px solid rgba(0,255,179,0.15)" }}>
+        {(["login", "register"] as const).map(m => (
+          <button key={m} onClick={() => { setMode(m); setError(""); }}
+            className="flex-1 py-2.5 text-sm font-semibold transition-all"
+            style={{ fontFamily: '"Exo 2", sans-serif', background: mode === m ? "rgba(0,255,179,0.12)" : "transparent", color: mode === m ? "var(--neon-green)" : "rgba(255,255,255,0.4)" }}>
+            {m === "login" ? "Войти" : "Регистрация"}
+          </button>
+        ))}
+      </div>
+
+      <div className="w-full space-y-3">
+        <div>
+          <label className="text-xs mb-1 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.5)" }}>Никнейм</label>
+          <input value={nickname} onChange={e => setNickname(e.target.value)} onKeyDown={handleKey}
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none transition-all"
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }}
+            placeholder="Ваш никнейм в клубе" />
+        </div>
+
+        {mode === "register" && (
+          <div>
+            <label className="text-xs mb-1 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.5)" }}>Автомобиль</label>
+            <input value={car} onChange={e => setCar(e.target.value)} onKeyDown={handleKey}
+              className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none transition-all"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }}
+              placeholder="Марка и модель" />
+          </div>
+        )}
+
+        <div>
+          <label className="text-xs mb-1 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.5)" }}>
+            PIN-код {mode === "register" && "(мин. 4 цифры)"}
+          </label>
+          <input value={pin} onChange={e => setPin(e.target.value)} onKeyDown={handleKey}
+            type="password" inputMode="numeric" maxLength={8}
+            className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none tracking-widest"
+            style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }}
+            placeholder="••••" />
+        </div>
+
+        {error && (
+          <div className="rounded-xl px-4 py-2.5 text-sm animate-fade-in"
+            style={{ background: "rgba(255,77,77,0.1)", border: "1px solid rgba(255,77,77,0.3)", color: "#ff6b6b" }}>
+            {error}
+          </div>
+        )}
+
+        <button onClick={submit} disabled={loading || !nickname.trim() || !pin.trim()}
+          className="neon-btn-filled w-full rounded-xl py-3.5 font-semibold text-sm flex items-center justify-center gap-2 transition-all"
+          style={{ fontFamily: '"Exo 2", sans-serif', opacity: loading ? 0.7 : 1 }}>
+          {loading ? (
+            <div className="w-4 h-4 rounded-full border-2 animate-spin" style={{ borderColor: "rgba(0,255,179,0.3)", borderTopColor: "var(--neon-green)" }} />
+          ) : (
+            <Icon name={mode === "login" ? "LogIn" : "UserPlus"} size={16} />
+          )}
+          {mode === "login" ? "Войти в клуб" : "Вступить в клуб"}
+        </button>
+      </div>
+
+      {mode === "login" && (
+        <div className="mt-6 glass-card rounded-xl p-3 w-full" style={{ border: "1px solid rgba(255,255,255,0.06)" }}>
+          <p className="text-xs text-center mb-2" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.35)" }}>Демо-аккаунты</p>
+          <div className="grid grid-cols-2 gap-1.5 text-xs" style={{ color: "rgba(255,255,255,0.5)" }}>
+            {[["Александр", "1234"], ["Максим", "1111"], ["Анна", "2222"], ["Кирилл", "4444"]].map(([n, p]) => (
+              <button key={n} onClick={() => { setNickname(n); setPin(p); }}
+                className="text-left px-2 py-1.5 rounded-lg transition-all"
+                style={{ background: "rgba(0,255,179,0.05)", border: "1px solid rgba(0,255,179,0.1)", color: "var(--neon-green)" }}>
+                {n} / {p}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function Index() {
   const [tab, setTab] = useState<Tab>("chats");
+  const [session, setSession] = useState<{ user: User; session_id: string } | null>(() => getSession());
 
   const navItems: { id: Tab; icon: string; label: string }[] = [
     { id: "chats", icon: "MessageCircle", label: "Чаты" },
@@ -832,72 +987,89 @@ export default function Index() {
 
   const unread = chats.reduce((s, c) => s + c.unread, 0);
 
-  return (
+  const handleLogin = (user: User, session_id: string) => {
+    setSession({ user, session_id });
+  };
+
+  const WRAP = (
     <div className="flex items-center justify-center min-h-screen"
       style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(0,255,179,0.04) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(0,212,255,0.04) 0%, transparent 60%), var(--bg-dark)" }}>
       <div className="relative flex flex-col w-full max-w-sm h-screen max-h-[812px] overflow-hidden rounded-none sm:rounded-[36px]"
         style={{ background: "var(--bg-dark)", border: "1px solid rgba(0,255,179,0.1)", boxShadow: "0 0 60px rgba(0,255,179,0.07), 0 0 120px rgba(0,212,255,0.04), 0 40px 100px rgba(0,0,0,0.6)" }}>
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0"
-          style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-          <div className="flex items-center gap-2">
-            <span className="text-xl">🏙️</span>
-            <span className="font-black text-base tracking-wider" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-green)", textShadow: "0 0 12px rgba(0,255,179,0.5)" }}>
-              ПУЛЬС<span style={{ color: "var(--neon-blue)" }}> ГОРОДА</span>
-            </span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="relative">
-              <Icon name="Bell" size={20} style={{ color: "rgba(255,255,255,0.5)" }} />
-              {unread > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center font-bold"
-                  style={{ background: "var(--neon-green)", color: "var(--bg-dark)", fontSize: "9px" }}>
-                  {unread}
+        {!session ? (
+          <LoginScreen onLogin={handleLogin} />
+        ) : (
+          <>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🏎️</span>
+                <span className="font-black text-base tracking-wider" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-green)", textShadow: "0 0 12px rgba(0,255,179,0.5)" }}>
+                  ПУЛЬС<span style={{ color: "var(--neon-blue)" }}> ГОРОДА</span>
                 </span>
-              )}
-            </button>
-            <span className="w-2.5 h-2.5 rounded-full animate-pulse-neon"
-              style={{ background: "var(--neon-green)", boxShadow: "0 0 6px var(--neon-green)" }} />
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-hidden">
-          {tab === "chats" && <ChatsScreen />}
-          {tab === "events" && <EventsScreen />}
-          {tab === "gallery" && <GalleryScreen />}
-          {tab === "members" && <MembersScreen />}
-          {tab === "search" && <SearchScreen />}
-          {tab === "settings" && <SettingsScreen />}
-        </div>
-
-        {/* Bottom Navigation */}
-        <nav className="mobile-nav flex-shrink-0 flex items-center justify-around px-1 py-2">
-          {navItems.map(item => (
-            <button key={item.id} onClick={() => setTab(item.id)}
-              className="flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-xl transition-all relative">
-              <div className="relative">
-                <Icon name={item.icon} size={21}
-                  style={{ color: tab === item.id ? "var(--neon-green)" : "rgba(255,255,255,0.3)", filter: tab === item.id ? "drop-shadow(0 0 5px rgba(0,255,179,0.8))" : "none", transition: "all 0.2s ease" }} />
-                {item.id === "chats" && unread > 0 && tab !== "chats" && (
-                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold"
-                    style={{ background: "var(--neon-green)", color: "var(--bg-dark)", fontSize: "8px" }}>
-                    {unread}
-                  </span>
-                )}
               </div>
-              <span style={{ fontFamily: '"Exo 2", sans-serif', fontSize: "9px", fontWeight: 500, color: tab === item.id ? "var(--neon-green)" : "rgba(255,255,255,0.3)", transition: "color 0.2s ease" }}>
-                {item.label}
-              </span>
-              {tab === item.id && (
-                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full"
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white"
+                    style={{ background: "linear-gradient(135deg, rgba(0,255,179,0.2), rgba(0,212,255,0.15))", border: "1px solid rgba(0,255,179,0.3)" }}>
+                    {session.user.nickname[0].toUpperCase()}
+                  </div>
+                </div>
+                <button className="relative">
+                  <Icon name="Bell" size={20} style={{ color: "rgba(255,255,255,0.5)" }} />
+                  {unread > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center font-bold"
+                      style={{ background: "var(--neon-green)", color: "var(--bg-dark)", fontSize: "9px" }}>
+                      {unread}
+                    </span>
+                  )}
+                </button>
+                <span className="w-2.5 h-2.5 rounded-full animate-pulse-neon"
                   style={{ background: "var(--neon-green)", boxShadow: "0 0 6px var(--neon-green)" }} />
-              )}
-            </button>
-          ))}
-        </nav>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-hidden">
+              {tab === "chats" && <ChatsScreen />}
+              {tab === "events" && <EventsScreen />}
+              {tab === "gallery" && <GalleryScreen />}
+              {tab === "members" && <MembersScreen />}
+              {tab === "search" && <SearchScreen />}
+              {tab === "settings" && <SettingsScreen />}
+            </div>
+
+            {/* Bottom Navigation */}
+            <nav className="mobile-nav flex-shrink-0 flex items-center justify-around px-1 py-2">
+              {navItems.map(item => (
+                <button key={item.id} onClick={() => setTab(item.id)}
+                  className="flex flex-col items-center gap-0.5 py-1.5 px-2 rounded-xl transition-all relative">
+                  <div className="relative">
+                    <Icon name={item.icon} size={21}
+                      style={{ color: tab === item.id ? "var(--neon-green)" : "rgba(255,255,255,0.3)", filter: tab === item.id ? "drop-shadow(0 0 5px rgba(0,255,179,0.8))" : "none", transition: "all 0.2s ease" }} />
+                    {item.id === "chats" && unread > 0 && tab !== "chats" && (
+                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold"
+                        style={{ background: "var(--neon-green)", color: "var(--bg-dark)", fontSize: "8px" }}>
+                        {unread}
+                      </span>
+                    )}
+                  </div>
+                  <span style={{ fontFamily: '"Exo 2", sans-serif', fontSize: "9px", fontWeight: 500, color: tab === item.id ? "var(--neon-green)" : "rgba(255,255,255,0.3)", transition: "color 0.2s ease" }}>
+                    {item.label}
+                  </span>
+                  {tab === item.id && (
+                    <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full"
+                      style={{ background: "var(--neon-green)", boxShadow: "0 0 6px var(--neon-green)" }} />
+                  )}
+                </button>
+              ))}
+            </nav>
+          </>
+        )}
       </div>
     </div>
   );
+
+  return WRAP;
 }
