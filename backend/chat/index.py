@@ -1,6 +1,6 @@
 """
 API чата автоклуба: получение чатов, сообщений, отправка сообщений.
-Параметр action: chats | messages
+Параметры action: chats | messages
 """
 import json
 import os
