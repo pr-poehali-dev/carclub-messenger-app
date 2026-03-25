@@ -899,6 +899,7 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
   // ── Управление клубом ──
   const [manageMembers, setManageMembers] = useState<User[]>([]);
   const [manageLoading, setManageLoading] = useState(false);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
   const [newChatName, setNewChatName] = useState("");
   const [newChatEmoji, setNewChatEmoji] = useState("💬");
   const [creatingChat, setCreatingChat] = useState(false);
@@ -924,6 +925,21 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
     setCreatingChat(false);
     if (res.ok) { setChatCreated(true); setNewChatName(""); setTimeout(() => setChatCreated(false), 3000); }
   };
+
+  const toggleAdmin = async (memberId: number, currentIsAdmin: boolean) => {
+    setTogglingId(memberId);
+    const res = await fetch(`${ADMIN_API}?action=set_admin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+      body: JSON.stringify({ user_id: memberId, is_admin: !currentIsAdmin }),
+    });
+    const d = await res.json();
+    if (res.ok) {
+      setManageMembers(prev => prev.map(m => m.id === memberId ? { ...m, isAdmin: d.isAdmin } : m));
+    }
+    setTogglingId(null);
+  };
+
   const [editNickname, setEditNickname] = useState(user.nickname);
   const [editCar, setEditCar] = useState(user.car || "");
   const [editLoading, setEditLoading] = useState(false);
@@ -1295,8 +1311,24 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
                     <div className="font-semibold text-white text-sm truncate" style={{ fontFamily: '"Exo 2", sans-serif' }}>{m.nickname}</div>
                     <div className="text-xs truncate" style={{ color: "rgba(255,255,255,0.4)" }}>{m.car || m.role}</div>
                   </div>
-                  {m.isAdmin && <span className="text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "rgba(0,255,179,0.1)", color: "var(--neon-green)", border: "1px solid rgba(0,255,179,0.2)" }}>Адм</span>}
-                  <NeonBadge label={m.level} color={m.levelColor} />
+                  {m.id !== user.id && (
+                    <button onClick={() => toggleAdmin(m.id, !!m.isAdmin)} disabled={togglingId === m.id}
+                      className="flex-shrink-0 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all"
+                      style={{
+                        fontFamily: '"Exo 2", sans-serif',
+                        background: m.isAdmin ? "rgba(0,255,179,0.12)" : "rgba(255,255,255,0.06)",
+                        border: m.isAdmin ? "1px solid rgba(0,255,179,0.35)" : "1px solid rgba(255,255,255,0.12)",
+                        color: m.isAdmin ? "var(--neon-green)" : "rgba(255,255,255,0.4)",
+                        opacity: togglingId === m.id ? 0.6 : 1,
+                      }}>
+                      {togglingId === m.id
+                        ? <div className="w-3 h-3 rounded-full border border-current animate-spin opacity-60" />
+                        : m.isAdmin ? "Адм ✓" : "Адм"}
+                    </button>
+                  )}
+                  {m.id === user.id && m.isAdmin && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-semibold flex-shrink-0" style={{ background: "rgba(0,255,179,0.1)", color: "var(--neon-green)", border: "1px solid rgba(0,255,179,0.2)" }}>Вы</span>
+                  )}
                 </div>
               ))}
             </div>

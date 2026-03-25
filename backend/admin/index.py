@@ -141,5 +141,27 @@ def handler(event: dict, context) -> dict:
             "lastMsg": "", "time": "", "unread": 0,
         }, ensure_ascii=False)}
 
+    # ── POST ?action=set_admin — назначить/снять администратора
+    if method == "POST" and action == "set_admin":
+        body = json.loads(event.get("body") or "{}")
+        target_id = body.get("user_id")
+        value = bool(body.get("is_admin", True))
+        if not target_id:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "user_id required"})}
+        if int(target_id) == user_id:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "Нельзя изменить свои права"})}
+        cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.users SET is_admin = %s WHERE id = %s RETURNING id, nickname, is_admin",
+                    (value, int(target_id)))
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+        if not row:
+            return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Пользователь не найден"})}
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"id": row[0], "nickname": row[1], "isAdmin": row[2]})}
+
     conn.close()
     return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
