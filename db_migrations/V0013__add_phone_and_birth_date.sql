@@ -1,0 +1,3 @@
+ALTER TABLE t_p76085414_carclub_messenger_ap.users
+  ADD COLUMN IF NOT EXISTS phone text DEFAULT NULL,
+  ADD COLUMN IF NOT EXISTS birth_date date DEFAULT NULL;

@@ -87,6 +87,31 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"code": new_code})}
 
+    # ── GET ?action=user_details&user_id=X — личные данные участника (только основатель)
+    if method == "GET" and action == "user_details":
+        user_id_param = params.get("user_id")
+        req_user_id = get_user_id(session_id, conn)
+        _, is_founder = get_user_rights(req_user_id, conn) if req_user_id else (False, False)
+        if not is_founder:
+            conn.close()
+            return {"statusCode": 403, "headers": CORS, "body": json.dumps({"error": "Только для основателя"})}
+        if not user_id_param:
+            conn.close()
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "user_id required"})}
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT phone, birth_date FROM {SCHEMA}.users WHERE id = %s
+        """, (int(user_id_param),))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        if not row:
+            return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Пользователь не найден"})}
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({
+            "phone": row[0],
+            "birthDate": row[1].isoformat() if row[1] else None,
+        }, ensure_ascii=False)}
+
     # ── GET ?action=rules — получить правила клуба (доступно всем)
     if method == "GET" and action == "rules":
         cur = conn.cursor()

@@ -120,6 +120,8 @@ def handler(event: dict, context) -> dict:
         pin = (body.get("pin") or "").strip()
         car = (body.get("car") or "").strip()
         invite = (body.get("invite_code") or "").strip()
+        phone = (body.get("phone") or "").strip() or None
+        birth_date = (body.get("birth_date") or "").strip() or None
         if not nickname or not pin:
             return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "nickname and pin required"})}
         if len(pin) < 4:
@@ -144,10 +146,10 @@ def handler(event: dict, context) -> dict:
             return {"statusCode": 409, "headers": CORS, "body": json.dumps({"error": "Никнейм уже занят"})}
 
         cur.execute(f"""
-            INSERT INTO {SCHEMA}.users (nickname, pin, car, role, level, level_color, points)
-            VALUES (%s, %s, %s, 'Участник', 'Новичок', '#00ffb3', 0)
+            INSERT INTO {SCHEMA}.users (nickname, pin, car, role, level, level_color, points, phone, birth_date)
+            VALUES (%s, %s, %s, 'Участник', 'Новичок', '#00ffb3', 0, %s, %s)
             RETURNING id, nickname, car, role, level, level_color, points, avatar_url, is_admin, is_founder
-        """, (nickname, hash_pin(pin), car))
+        """, (nickname, hash_pin(pin), car, phone, birth_date))
         row = cur.fetchone()
         conn.commit()
         cur.close()

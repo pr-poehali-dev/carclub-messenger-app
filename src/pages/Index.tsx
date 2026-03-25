@@ -165,10 +165,10 @@ async function apiLogin(nickname: string, pin: string) {
   return { ok: res.ok, data: await res.json() };
 }
 
-async function apiRegister(nickname: string, pin: string, car: string, inviteCode: string) {
+async function apiRegister(nickname: string, pin: string, car: string, inviteCode: string, phone?: string, birthDate?: string) {
   const res = await fetch(`${AUTH_API}?action=register`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nickname, pin, car, invite_code: inviteCode }),
+    body: JSON.stringify({ nickname, pin, car, invite_code: inviteCode, phone, birth_date: birthDate }),
   });
   return { ok: res.ok, data: await res.json() };
 }
@@ -1467,6 +1467,8 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
   const [editingRoleId, setEditingRoleId] = useState<number | null>(null);
   const [roleInput, setRoleInput] = useState<Record<number, string>>({});
   const [savingRoleId, setSavingRoleId] = useState<number | null>(null);
+  const [detailsMap, setDetailsMap] = useState<Record<number, { phone?: string; birthDate?: string } | null>>({});
+  const [loadingDetailsId, setLoadingDetailsId] = useState<number | null>(null);
   const [newChatName, setNewChatName] = useState("");
   const [newChatEmoji, setNewChatEmoji] = useState("💬");
   const [newChatPrivate, setNewChatPrivate] = useState(false);
@@ -1540,6 +1542,17 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
       setEditingRoleId(null);
     }
     setSavingRoleId(null);
+  };
+
+  const loadUserDetails = async (memberId: number) => {
+    if (detailsMap[memberId] !== undefined) return;
+    setLoadingDetailsId(memberId);
+    const res = await fetch(`${ADMIN_API}?action=user_details&user_id=${memberId}`, {
+      headers: { "X-Session-Id": sessionId },
+    });
+    const d = await res.json();
+    setDetailsMap(prev => ({ ...prev, [memberId]: res.ok ? d : null }));
+    setLoadingDetailsId(null);
   };
 
   const [editNickname, setEditNickname] = useState(user.nickname);
@@ -2111,6 +2124,43 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
                           : m.isAdmin ? "Адм ✓" : "+ Адм"}
                       </button>
                     )}
+                    {/* Кнопка просмотра личных данных */}
+                    <button onClick={() => loadUserDetails(m.id)} disabled={loadingDetailsId === m.id}
+                      className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center transition-all"
+                      style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}
+                      title="Личные данные">
+                      {loadingDetailsId === m.id
+                        ? <div className="w-3 h-3 rounded-full border animate-spin" style={{ borderColor: "rgba(255,255,255,0.2)", borderTopColor: "rgba(255,255,255,0.6)" }} />
+                        : <Icon name="Info" size={13} style={{ color: "rgba(255,255,255,0.45)" }} />}
+                    </button>
+                  </div>
+
+                )}
+
+                {/* Блок личных данных (только основатель, после загрузки) */}
+                {user.isFounder && m.id !== user.id && detailsMap[m.id] !== undefined && (
+                  <div className="mt-2 pl-[52px]">
+                    {detailsMap[m.id] === null ? (
+                      <p className="text-xs" style={{ color: "rgba(255,77,77,0.7)" }}>Ошибка загрузки</p>
+                    ) : (
+                      <div className="rounded-xl px-3 py-2 space-y-1"
+                        style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)" }}>
+                        <div className="flex items-center gap-2 text-xs">
+                          <Icon name="Phone" size={11} style={{ color: "rgba(255,255,255,0.35)", flexShrink: 0 }} />
+                          <span style={{ color: detailsMap[m.id]?.phone ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)" }}>
+                            {detailsMap[m.id]?.phone || "Телефон не указан"}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                          <Icon name="Calendar" size={11} style={{ color: "rgba(255,255,255,0.35)", flexShrink: 0 }} />
+                          <span style={{ color: detailsMap[m.id]?.birthDate ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.3)" }}>
+                            {detailsMap[m.id]?.birthDate
+                              ? new Date(detailsMap[m.id]!.birthDate!).toLocaleDateString("ru", { day: "numeric", month: "long", year: "numeric" })
+                              : "Дата рождения не указана"}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -2130,6 +2180,8 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, sid: string) => void }
   const [nickname, setNickname] = useState("");
   const [pin, setPin] = useState("");
   const [car, setCar] = useState("");
+  const [phone, setPhone] = useState("");
+  const [birthDate, setBirthDate] = useState("");
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -2141,7 +2193,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, sid: string) => void }
     setError("");
     const { ok, data } = mode === "login"
       ? await apiLogin(nickname.trim(), pin.trim())
-      : await apiRegister(nickname.trim(), pin.trim(), car.trim(), inviteCode.trim());
+      : await apiRegister(nickname.trim(), pin.trim(), car.trim(), inviteCode.trim(), phone.trim() || undefined, birthDate || undefined);
     setLoading(false);
     if (!ok) { setError(data.error || "Ошибка"); return; }
     saveSession({ session_id: data.session_id, user: data.user });
@@ -2192,6 +2244,27 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, sid: string) => void }
                 className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none transition-all"
                 style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }}
                 placeholder="Марка и модель" />
+            </div>
+            <div>
+              <label className="text-xs mb-1 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.5)" }}>
+                Номер телефона
+              </label>
+              <input value={phone} onChange={e => setPhone(e.target.value)} onKeyDown={handleKey}
+                type="tel"
+                className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)" }}
+                placeholder="+7 900 000 00 00" />
+              <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.3)" }}>Видно только основателю клуба</p>
+            </div>
+            <div>
+              <label className="text-xs mb-1 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.5)" }}>
+                Дата рождения
+              </label>
+              <input value={birthDate} onChange={e => setBirthDate(e.target.value)}
+                type="date"
+                className="w-full rounded-xl px-4 py-3 text-sm text-white outline-none"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(0,255,179,0.2)", colorScheme: "dark" }} />
+              <p className="text-xs mt-1" style={{ color: "rgba(255,255,255,0.3)" }}>Видно только основателю клуба</p>
             </div>
             <div>
               <label className="text-xs mb-1 block" style={{ fontFamily: '"Exo 2", sans-serif', color: "rgba(255,255,255,0.5)" }}>
