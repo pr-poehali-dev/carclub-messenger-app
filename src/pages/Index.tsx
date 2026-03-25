@@ -2206,13 +2206,11 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, sid: string) => void }
     <div className="flex flex-col items-center justify-center h-full px-6 animate-fade-in"
       style={{ background: "radial-gradient(ellipse at 50% 30%, rgba(0,255,179,0.06) 0%, transparent 70%)" }}>
 
-      <div className="mb-8 text-center">
-        <div className="text-5xl mb-4 animate-float">🏎️</div>
-        <h1 className="font-black text-2xl tracking-wider mb-1"
-          style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-green)", textShadow: "0 0 16px rgba(0,255,179,0.5)" }}>
-          ПУЛЬС<span style={{ color: "var(--neon-blue)" }}> ГОРОДА</span>
-        </h1>
-        <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>Мессенджер автоклуба</p>
+      <div className="mb-6 text-center">
+        <img src="https://cdn.poehali.dev/projects/63e708a6-7a81-48b1-9e5a-267986d3465b/bucket/272052ea-0d03-4f7a-a84f-2d3393e6620a.jpg"
+          alt="Пульс Города" className="mx-auto animate-float"
+          style={{ width: 140, height: 140, objectFit: "contain", filter: "drop-shadow(0 0 16px rgba(0,255,179,0.25))" }} />
+        <p className="text-xs mt-2" style={{ color: "rgba(255,255,255,0.4)" }}>Мессенджер автоклуба · Севастополь</p>
       </div>
 
       {/* Переключатель */}
@@ -2374,8 +2372,10 @@ export default function Index() {
             <div className="flex items-center justify-between px-5 pt-5 pb-3 flex-shrink-0"
               style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
               <div className="flex items-center gap-2">
-                <span className="text-xl">🏎️</span>
-                <span className="font-black text-base tracking-wider" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-green)", textShadow: "0 0 12px rgba(0,255,179,0.5)" }}>
+                <img src="https://cdn.poehali.dev/projects/63e708a6-7a81-48b1-9e5a-267986d3465b/bucket/272052ea-0d03-4f7a-a84f-2d3393e6620a.jpg"
+                  alt="Пульс Города"
+                  style={{ width: 36, height: 36, objectFit: "contain", filter: "drop-shadow(0 0 6px rgba(0,255,179,0.3))" }} />
+                <span className="font-black text-sm tracking-wider" style={{ fontFamily: '"Exo 2", sans-serif', color: "var(--neon-green)", textShadow: "0 0 10px rgba(0,255,179,0.4)" }}>
                   ПУЛЬС<span style={{ color: "var(--neon-blue)" }}> ГОРОДА</span>
                 </span>
               </div>
