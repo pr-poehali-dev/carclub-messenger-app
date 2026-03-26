@@ -17,6 +17,7 @@ interface Message {
   replyToId?: number | null;
   replyToText?: string | null;
   replyToSender?: string | null;
+  reactions?: { emoji: string; sender: string }[];
 }
 
 interface Chat {
@@ -178,6 +179,16 @@ async function apiRemoveMessage(id: number, sessionId: string): Promise<void> {
   });
 }
 
+async function apiToggleReaction(messageId: number, emoji: string, sender: string): Promise<{ emoji: string; sender: string }[]> {
+  const res = await fetch(`${API}?action=toggle_reaction`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message_id: messageId, emoji, sender }),
+  });
+  const data = await res.json();
+  return data.reactions || [];
+}
+
 async function apiCreateChat(name: string, avatar: string, isGroup = false, memberIds: number[] = [], sessionId = ""): Promise<{ id: number }> {
   const res = await fetch(`${API}?action=create_chat`, {
     method: "POST",
@@ -238,6 +249,7 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   const [msgMenu, setMsgMenu] = useState<{ id: number; x: number; y: number } | null>(null);
   const [editingMsg, setEditingMsg] = useState<{ id: number; text: string } | null>(null);
   const [replyingTo, setReplyingTo] = useState<{ id: number; text: string; sender: string } | null>(null);
+  const [reactionPicker, setReactionPicker] = useState<number | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastIdRef = useRef(0);
@@ -689,6 +701,33 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
                     {m.isEdited && !m.isRemoved && <span>изменено</span>}
                     {m.time}
                   </p>
+                  {/* Реакции */}
+                  {m.reactions && m.reactions.length > 0 && (() => {
+                    const grouped = m.reactions.reduce<Record<string, string[]>>((acc, r) => {
+                      if (!acc[r.emoji]) acc[r.emoji] = [];
+                      acc[r.emoji].push(r.sender);
+                      return acc;
+                    }, {});
+                    return (
+                      <div className={`flex flex-wrap gap-1 mt-1 ${m.out ? "justify-end" : "justify-start"}`}>
+                        {Object.entries(grouped).map(([emoji, senders]) => {
+                          const mine = senders.includes(user.nickname);
+                          return (
+                            <button key={emoji}
+                              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs transition-all"
+                              style={{ background: mine ? "rgba(0,255,179,0.15)" : "rgba(255,255,255,0.08)", border: `1px solid ${mine ? "rgba(0,255,179,0.4)" : "rgba(255,255,255,0.1)"}` }}
+                              onClick={async () => {
+                                const updated = await apiToggleReaction(m.id, emoji, user.nickname);
+                                setMessages(prev => prev.map(x => x.id === m.id ? { ...x, reactions: updated } : x));
+                              }}>
+                              <span style={{ fontSize: "0.85rem", lineHeight: 1 }}>{emoji}</span>
+                              {senders.length > 1 && <span style={{ color: mine ? "var(--neon-green)" : "rgba(255,255,255,0.5)" }}>{senders.length}</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -701,6 +740,16 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
                 <div className="absolute rounded-2xl overflow-hidden shadow-xl"
                   style={{ left: Math.min(msgMenu.x, window.innerWidth - 190), top: Math.min(msgMenu.y, window.innerHeight - 130), background: "rgba(20,20,30,0.97)", border: "1px solid rgba(0,255,179,0.2)", backdropFilter: "blur(16px)", minWidth: 170 }}
                   onClick={e => e.stopPropagation()}>
+                  {/* Реакция */}
+                  <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/5 transition-all text-left"
+                    onClick={() => {
+                      if (menuMsg) setReactionPicker(menuMsg.id);
+                      setMsgMenu(null);
+                    }}>
+                    <span style={{ fontSize: "1rem" }}>😊</span>
+                    Реакция
+                  </button>
+                  <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
                   {/* Ответить — для всех сообщений */}
                   <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/5 transition-all text-left"
                     onClick={() => {
@@ -740,6 +789,28 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
               </div>
             );
           })()}
+          {/* Пикер реакций */}
+          {reactionPicker !== null && (
+            <div className="fixed inset-0 z-50 flex items-end justify-center pb-24" onClick={() => setReactionPicker(null)}>
+              <div className="rounded-2xl px-3 py-2 flex gap-1 animate-fade-in"
+                style={{ background: "rgba(20,20,30,0.97)", border: "1px solid rgba(0,255,179,0.2)", backdropFilter: "blur(16px)" }}
+                onClick={e => e.stopPropagation()}>
+                {["❤️","👍","😂","😮","😢","🔥","👏","🏎️"].map(emoji => (
+                  <button key={emoji}
+                    className="text-2xl p-2 rounded-xl hover:bg-white/10 transition-all active:scale-125"
+                    style={{ lineHeight: 1 }}
+                    onClick={async () => {
+                      const msgId = reactionPicker;
+                      setReactionPicker(null);
+                      const updated = await apiToggleReaction(msgId, emoji, user.nickname);
+                      setMessages(prev => prev.map(m => m.id === msgId ? { ...m, reactions: updated } : m));
+                    }}>
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
 

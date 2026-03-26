@@ -135,12 +135,30 @@ def handler(event: dict, context) -> dict:
             ORDER BY created_at ASC
         """, (int(chat_id), int(after)))
         rows = cur.fetchall()
+        msg_ids = [r[0] for r in rows]
+        reactions_map = {}
+        if msg_ids:
+            placeholders = ",".join(["%s"] * len(msg_ids))
+            cur2 = conn.cursor()
+            cur2.execute(f"""
+                SELECT message_id, emoji, sender, COUNT(*) as cnt
+                FROM {SCHEMA}.message_reactions
+                WHERE message_id IN ({placeholders})
+                GROUP BY message_id, emoji, sender
+            """, msg_ids)
+            for rr in cur2.fetchall():
+                mid = rr[0]
+                if mid not in reactions_map:
+                    reactions_map[mid] = []
+                reactions_map[mid].append({"emoji": rr[1], "sender": rr[2], "count": int(rr[3])})
+            cur2.close()
         cur.close()
         conn.close()
         msgs = [{"id": r[0], "text": r[1], "sender": r[2], "out": (r[2] == me) if me else False,
                  "time": fmt_time(r[3]), "type": r[4] or "text", "mediaUrl": r[5],
                  "isEdited": bool(r[6]), "isRemoved": bool(r[7]),
-                 "replyToId": r[8], "replyToText": r[9], "replyToSender": r[10]} for r in rows]
+                 "replyToId": r[8], "replyToText": r[9], "replyToSender": r[10],
+                 "reactions": reactions_map.get(r[0], [])} for r in rows]
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(msgs, ensure_ascii=False)}
 
     # POST ?action=messages — отправить сообщение (text/image/voice/emoji)
@@ -287,5 +305,40 @@ def handler(event: dict, context) -> dict:
         cur.close()
         conn.close()
         return {"statusCode": 200, "headers": CORS, "body": json.dumps({"id": new_id, "existed": False})}
+
+    # POST ?action=toggle_reaction — поставить/снять реакцию
+    if method == "POST" and action == "toggle_reaction":
+        body = json.loads(event.get("body") or "{}")
+        message_id = body.get("message_id")
+        emoji = (body.get("emoji") or "").strip()
+        sender = (body.get("sender") or "me").strip()
+        if not message_id or not emoji:
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "message_id and emoji required"})}
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"""
+            SELECT id FROM {SCHEMA}.message_reactions
+            WHERE message_id = %s AND emoji = %s AND sender = %s
+        """, (int(message_id), emoji, sender))
+        existing = cur.fetchone()
+        if existing:
+            cur.execute(f"DELETE FROM {SCHEMA}.message_reactions WHERE id = %s", (existing[0],))
+            action_done = "removed"
+        else:
+            cur.execute(f"""
+                INSERT INTO {SCHEMA}.message_reactions (message_id, emoji, sender)
+                VALUES (%s, %s, %s) ON CONFLICT DO NOTHING
+            """, (int(message_id), emoji, sender))
+            action_done = "added"
+        conn.commit()
+        cur2 = conn.cursor()
+        cur2.execute(f"""
+            SELECT emoji, sender FROM {SCHEMA}.message_reactions WHERE message_id = %s
+        """, (int(message_id),))
+        reactions = [{"emoji": rr[0], "sender": rr[1]} for rr in cur2.fetchall()]
+        cur2.close()
+        cur.close()
+        conn.close()
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True, "action": action_done, "reactions": reactions}, ensure_ascii=False)}
 
     return {"statusCode": 404, "headers": CORS, "body": json.dumps({"error": "Not found"})}
