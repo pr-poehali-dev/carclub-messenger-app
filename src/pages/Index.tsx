@@ -634,7 +634,7 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
             </div>
           )}
           {messages.map(m => (
-            <div key={m.id} className={`flex ${m.out ? "justify-end" : "justify-start"} animate-fade-in`}
+            <div key={m.id} id={`msg-${m.id}`} className={`flex ${m.out ? "justify-end" : "justify-start"} animate-fade-in`}
               onContextMenu={!m.isRemoved ? (e) => { e.preventDefault(); setMsgMenu({ id: m.id, x: e.clientX, y: e.clientY }); } : undefined}
               onTouchStart={!m.isRemoved ? (() => { let t: ReturnType<typeof setTimeout>; return (e: React.TouchEvent) => { const touch = e.touches[0]; t = setTimeout(() => setMsgMenu({ id: m.id, x: touch.clientX, y: touch.clientY }), 500); }; })() : undefined}
             >
@@ -669,7 +669,15 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
                   )}
                   {/* Цитата */}
                   {m.replyToText && !m.isRemoved && (
-                    <div className="mb-2 pl-2 rounded-lg" style={{ borderLeft: "2px solid var(--neon-green)", background: "rgba(0,255,179,0.06)" }}>
+                    <div className="mb-2 pl-2 rounded-lg cursor-pointer transition-opacity hover:opacity-80 active:opacity-60"
+                      style={{ borderLeft: "2px solid var(--neon-green)", background: "rgba(0,255,179,0.06)" }}
+                      onClick={() => {
+                        const el = document.getElementById(`msg-${m.replyToId}`);
+                        if (el) {
+                          el.scrollIntoView({ behavior: "smooth", block: "center" });
+                          el.animate([{ background: "rgba(0,255,179,0.15)" }, { background: "transparent" }], { duration: 1200, easing: "ease-out" });
+                        }
+                      }}>
                       {m.replyToSender && (
                         <p className="text-xs font-semibold" style={{ color: "var(--neon-green)" }}>{m.replyToSender}</p>
                       )}
