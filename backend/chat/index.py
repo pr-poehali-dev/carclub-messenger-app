@@ -128,7 +128,8 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(f"""
-            SELECT id, text, sender, created_at, type, media_url, is_edited, is_removed
+            SELECT id, text, sender, created_at, type, media_url, is_edited, is_removed,
+                   reply_to_id, reply_to_text, reply_to_sender
             FROM {SCHEMA}.messages
             WHERE chat_id = %s AND id > %s
             ORDER BY created_at ASC
@@ -138,7 +139,8 @@ def handler(event: dict, context) -> dict:
         conn.close()
         msgs = [{"id": r[0], "text": r[1], "sender": r[2], "out": (r[2] == me) if me else False,
                  "time": fmt_time(r[3]), "type": r[4] or "text", "mediaUrl": r[5],
-                 "isEdited": bool(r[6]), "isRemoved": bool(r[7])} for r in rows]
+                 "isEdited": bool(r[6]), "isRemoved": bool(r[7]),
+                 "replyToId": r[8], "replyToText": r[9], "replyToSender": r[10]} for r in rows]
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(msgs, ensure_ascii=False)}
 
     # POST ?action=messages — отправить сообщение (text/image/voice/emoji)
@@ -150,6 +152,9 @@ def handler(event: dict, context) -> dict:
         sender = (body.get("sender") or "").strip() or "me"
         media_data = body.get("media")      # base64
         media_content_type = body.get("media_content_type", "image/jpeg")
+        reply_to_id = body.get("replyToId") or None
+        reply_to_text = (body.get("replyToText") or "").strip() or None
+        reply_to_sender = (body.get("replyToSender") or "").strip() or None
 
         if not chat_id:
             return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id required"})}
@@ -174,16 +179,17 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(f"""
-            INSERT INTO {SCHEMA}.messages (chat_id, text, sender, is_out, type, media_url)
-            VALUES (%s, %s, %s, true, %s, %s)
-            RETURNING id, text, sender, is_out, created_at, type, media_url
-        """, (int(chat_id), text, sender, msg_type, media_url))
+            INSERT INTO {SCHEMA}.messages (chat_id, text, sender, is_out, type, media_url, reply_to_id, reply_to_text, reply_to_sender)
+            VALUES (%s, %s, %s, true, %s, %s, %s, %s, %s)
+            RETURNING id, text, sender, is_out, created_at, type, media_url, reply_to_id, reply_to_text, reply_to_sender
+        """, (int(chat_id), text, sender, msg_type, media_url, reply_to_id, reply_to_text, reply_to_sender))
         r = cur.fetchone()
         conn.commit()
         cur.close()
         conn.close()
         msg = {"id": r[0], "text": r[1], "sender": r[2], "out": r[3], "time": fmt_time(r[4]),
-               "type": r[5], "mediaUrl": r[6]}
+               "type": r[5], "mediaUrl": r[6],
+               "replyToId": r[7], "replyToText": r[8], "replyToSender": r[9]}
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(msg, ensure_ascii=False)}
 
     # PUT ?action=edit_message — редактировать своё сообщение

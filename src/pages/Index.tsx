@@ -14,6 +14,9 @@ interface Message {
   mediaUrl?: string | null;
   isEdited?: boolean;
   isRemoved?: boolean;
+  replyToId?: number | null;
+  replyToText?: string | null;
+  replyToSender?: string | null;
 }
 
 interface Chat {
@@ -149,6 +152,7 @@ async function apiGetMessages(chatId: number, after = 0, myNickname = ""): Promi
 
 async function apiSendMessage(chatId: number, payload: {
   text?: string; type?: string; media?: string; media_content_type?: string; sender?: string;
+  replyToId?: number; replyToText?: string; replyToSender?: string;
 }): Promise<Message> {
   const res = await fetch(`${API}?action=messages`, {
     method: "POST",
@@ -233,6 +237,7 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   const [isRecording, setIsRecording] = useState(false);
   const [msgMenu, setMsgMenu] = useState<{ id: number; x: number; y: number } | null>(null);
   const [editingMsg, setEditingMsg] = useState<{ id: number; text: string } | null>(null);
+  const [replyingTo, setReplyingTo] = useState<{ id: number; text: string; sender: string } | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastIdRef = useRef(0);
@@ -339,7 +344,13 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
     const text = msgText.trim();
     setMsgText("");
     setShowEmoji(false);
-    await pushMessage({ id: Date.now(), text, time: now(), out: true, type: "text", sender: user.nickname }, { text, type: "text", sender: user.nickname });
+    const reply = replyingTo;
+    setReplyingTo(null);
+    const optimistic: Message = { id: Date.now(), text, time: now(), out: true, type: "text", sender: user.nickname,
+      replyToId: reply?.id, replyToText: reply?.text, replyToSender: reply?.sender };
+    const payload: Parameters<typeof apiSendMessage>[1] = { text, type: "text", sender: user.nickname,
+      ...(reply ? { replyToId: reply.id, replyToText: reply.text, replyToSender: reply.sender } : {}) };
+    await pushMessage(optimistic, payload);
   };
 
   const sendEmoji = async (emoji: string) => {
@@ -624,8 +635,8 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
           )}
           {messages.map(m => (
             <div key={m.id} className={`flex ${m.out ? "justify-end" : "justify-start"} animate-fade-in`}
-              onContextMenu={m.out && !m.isRemoved ? (e) => { e.preventDefault(); setMsgMenu({ id: m.id, x: e.clientX, y: e.clientY }); } : undefined}
-              onTouchStart={m.out && !m.isRemoved ? (() => { let t: ReturnType<typeof setTimeout>; return (e: React.TouchEvent) => { const touch = e.touches[0]; t = setTimeout(() => setMsgMenu({ id: m.id, x: touch.clientX, y: touch.clientY }), 500); }; })() : undefined}
+              onContextMenu={!m.isRemoved ? (e) => { e.preventDefault(); setMsgMenu({ id: m.id, x: e.clientX, y: e.clientY }); } : undefined}
+              onTouchStart={!m.isRemoved ? (() => { let t: ReturnType<typeof setTimeout>; return (e: React.TouchEvent) => { const touch = e.touches[0]; t = setTimeout(() => setMsgMenu({ id: m.id, x: touch.clientX, y: touch.clientY }), 500); }; })() : undefined}
             >
               {m.type === "emoji" ? (
                 <div className={`flex flex-col ${m.out ? "items-end" : "items-start"}`}>
@@ -656,6 +667,15 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
                   {!m.out && m.sender && m.sender !== "me" && (
                     <p className="text-xs font-semibold mb-1" style={{ color: "var(--neon-blue)" }}>{m.sender}</p>
                   )}
+                  {/* Цитата */}
+                  {m.replyToText && !m.isRemoved && (
+                    <div className="mb-2 pl-2 rounded-lg" style={{ borderLeft: "2px solid var(--neon-green)", background: "rgba(0,255,179,0.06)" }}>
+                      {m.replyToSender && (
+                        <p className="text-xs font-semibold" style={{ color: "var(--neon-green)" }}>{m.replyToSender}</p>
+                      )}
+                      <p className="text-xs truncate" style={{ color: "rgba(255,255,255,0.5)" }}>{m.replyToText}</p>
+                    </div>
+                  )}
                   <p className={`text-sm ${m.isRemoved ? "italic" : "text-white"}`} style={m.isRemoved ? { color: "rgba(255,255,255,0.4)" } : {}}>{m.text}</p>
                   <p className="text-xs mt-1 text-right flex items-center justify-end gap-1" style={{ color: "rgba(255,255,255,0.4)" }}>
                     {m.isEdited && !m.isRemoved && <span>изменено</span>}
@@ -666,35 +686,52 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
             </div>
           ))}
           {/* Контекстное меню сообщения */}
-          {msgMenu && (
-            <div className="fixed inset-0 z-50" onClick={() => setMsgMenu(null)}>
-              <div className="absolute rounded-2xl overflow-hidden shadow-xl"
-                style={{ left: Math.min(msgMenu.x, window.innerWidth - 180), top: Math.min(msgMenu.y, window.innerHeight - 100), background: "rgba(20,20,30,0.97)", border: "1px solid rgba(0,255,179,0.2)", backdropFilter: "blur(16px)", minWidth: 160 }}
-                onClick={e => e.stopPropagation()}>
-                <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/5 transition-all text-left"
-                  onClick={() => {
-                    const m = messages.find(x => x.id === msgMenu.id);
-                    if (m) { setEditingMsg({ id: m.id, text: m.text }); setMsgText(m.text); }
-                    setMsgMenu(null);
-                  }}>
-                  <Icon name="Pencil" size={15} style={{ color: "var(--neon-green)" }} />
-                  Редактировать
-                </button>
-                <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
-                <button className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-white/5 transition-all text-left"
-                  style={{ color: "#ff4d4d" }}
-                  onClick={async () => {
-                    const id = msgMenu.id;
-                    setMsgMenu(null);
-                    await apiRemoveMessage(id, sessionId);
-                    setMessages(prev => prev.map(m => m.id === id ? { ...m, text: "Сообщение удалено", isRemoved: true } : m));
-                  }}>
-                  <Icon name="Trash2" size={15} style={{ color: "#ff4d4d" }} />
-                  Удалить
-                </button>
+          {msgMenu && (() => {
+            const menuMsg = messages.find(x => x.id === msgMenu.id);
+            return (
+              <div className="fixed inset-0 z-50" onClick={() => setMsgMenu(null)}>
+                <div className="absolute rounded-2xl overflow-hidden shadow-xl"
+                  style={{ left: Math.min(msgMenu.x, window.innerWidth - 190), top: Math.min(msgMenu.y, window.innerHeight - 130), background: "rgba(20,20,30,0.97)", border: "1px solid rgba(0,255,179,0.2)", backdropFilter: "blur(16px)", minWidth: 170 }}
+                  onClick={e => e.stopPropagation()}>
+                  {/* Ответить — для всех сообщений */}
+                  <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/5 transition-all text-left"
+                    onClick={() => {
+                      if (menuMsg) setReplyingTo({ id: menuMsg.id, text: menuMsg.text, sender: menuMsg.sender || "" });
+                      setMsgMenu(null);
+                    }}>
+                    <Icon name="Reply" size={15} style={{ color: "var(--neon-green)" }} />
+                    Ответить
+                  </button>
+                  {/* Редактировать / Удалить — только для своих */}
+                  {menuMsg?.out && (
+                    <>
+                      <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
+                      <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/5 transition-all text-left"
+                        onClick={() => {
+                          if (menuMsg) { setEditingMsg({ id: menuMsg.id, text: menuMsg.text }); setMsgText(menuMsg.text); }
+                          setMsgMenu(null);
+                        }}>
+                        <Icon name="Pencil" size={15} style={{ color: "rgba(255,255,255,0.6)" }} />
+                        Редактировать
+                      </button>
+                      <div style={{ height: 1, background: "rgba(255,255,255,0.06)" }} />
+                      <button className="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-white/5 transition-all text-left"
+                        style={{ color: "#ff4d4d" }}
+                        onClick={async () => {
+                          const id = msgMenu.id;
+                          setMsgMenu(null);
+                          await apiRemoveMessage(id, sessionId);
+                          setMessages(prev => prev.map(m => m.id === id ? { ...m, text: "Сообщение удалено", isRemoved: true } : m));
+                        }}>
+                        <Icon name="Trash2" size={15} style={{ color: "#ff4d4d" }} />
+                        Удалить
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
           <div ref={bottomRef} />
         </div>
 
@@ -737,6 +774,21 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
         <div className="px-3 py-3" style={{ borderTop: "1px solid rgba(0,255,179,0.12)" }}>
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) sendImage(f); e.target.value = ""; }} />
+          {/* Панель режима ответа */}
+          {replyingTo && !editingMsg && (
+            <div className="flex items-center gap-2 px-1 pb-2 animate-fade-in">
+              <div className="w-0.5 self-stretch rounded-full flex-shrink-0" style={{ background: "var(--neon-green)" }} />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold" style={{ color: "var(--neon-green)" }}>{replyingTo.sender || "Сообщение"}</p>
+                <p className="text-xs truncate" style={{ color: "rgba(255,255,255,0.45)" }}>{replyingTo.text}</p>
+              </div>
+              <button onClick={() => setReplyingTo(null)}
+                className="w-5 h-5 flex items-center justify-center rounded-full flex-shrink-0"
+                style={{ color: "rgba(255,255,255,0.4)", background: "rgba(255,255,255,0.08)" }}>
+                <Icon name="X" size={11} />
+              </button>
+            </div>
+          )}
           {/* Панель режима редактирования */}
           {editingMsg && (
             <div className="flex items-center gap-2 px-1 pb-2 animate-fade-in">
