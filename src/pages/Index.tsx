@@ -2800,6 +2800,7 @@ export default function Index() {
   ];
 
   const unread = chats.reduce((s, c) => s + c.unread, 0);
+  const [pushEnabled, setPushEnabled] = useState(Notification.permission === "granted");
 
   const subscribeToPush = async (session_id: string) => {
     try {
@@ -2819,6 +2820,7 @@ export default function Index() {
         headers: { "Content-Type": "application/json", "X-Session-Id": session_id },
         body: JSON.stringify(sub.toJSON()),
       });
+      setPushEnabled(true);
     } catch { /* тихо игнорируем */ }
   };
 
@@ -2875,8 +2877,8 @@ export default function Index() {
                       : session.user.nickname[0].toUpperCase()}
                   </div>
                 </div>
-                <button className="relative">
-                  <Icon name="Bell" size={20} style={{ color: "rgba(255,255,255,0.5)" }} />
+                <button className="relative" onClick={() => subscribeToPush(session.session_id)}>
+                  <Icon name="Bell" size={20} style={{ color: pushEnabled ? "var(--neon-green)" : "rgba(255,255,255,0.5)" }} />
                   {unread > 0 && (
                     <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center font-bold"
                       style={{ background: "var(--neon-green)", color: "var(--bg-dark)", fontSize: "9px" }}>
