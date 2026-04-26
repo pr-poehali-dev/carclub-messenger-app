@@ -71,14 +71,19 @@ def handler(event: dict, context) -> dict:
         cur.execute(f"""
             SELECT c.id, c.name, c.avatar, c.is_group, c.is_private,
                    m.text AS last_msg, m.type AS last_type, m.created_at AS last_time,
-                   COUNT(m2.id) FILTER (WHERE m2.is_out = false) AS unread,
+                   COALESCE((
+                       SELECT COUNT(*) FROM {SCHEMA}.messages m2
+                       WHERE m2.chat_id = c.id AND m2.is_out = false
+                         AND m2.created_at > COALESCE(
+                             (SELECT last_read_at FROM {SCHEMA}.chat_members
+                              WHERE chat_id = c.id AND user_id = %s), '-infinity'::timestamptz)
+                   ), 0) AS unread,
                    other_u.nickname AS other_name, other_u.avatar_url AS other_avatar
             FROM {SCHEMA}.chats c
             LEFT JOIN LATERAL (
                 SELECT text, type, created_at FROM {SCHEMA}.messages
                 WHERE chat_id = c.id ORDER BY created_at DESC LIMIT 1
             ) m ON true
-            LEFT JOIN {SCHEMA}.messages m2 ON m2.chat_id = c.id
             LEFT JOIN LATERAL (
                 SELECT u.nickname, u.avatar_url FROM {SCHEMA}.chat_members cm2
                 JOIN {SCHEMA}.users u ON u.id = cm2.user_id
@@ -93,7 +98,7 @@ def handler(event: dict, context) -> dict:
                ))
             GROUP BY c.id, c.name, c.avatar, c.is_group, c.is_private, m.text, m.type, m.created_at, other_u.nickname, other_u.avatar_url
             ORDER BY m.created_at DESC NULLS LAST
-        """, (user_id, user_id))
+        """, (user_id, user_id, user_id))
         rows = cur.fetchall()
         cur.close()
         conn.close()
@@ -117,6 +122,24 @@ def handler(event: dict, context) -> dict:
                 "lastMsg": last_msg_preview(r[5], r[6]), "time": fmt_time(r[7]), "unread": int(r[8] or 0)
             })
         return {"statusCode": 200, "headers": CORS, "body": json.dumps(chats, ensure_ascii=False)}
+
+    # POST ?action=mark_read&chat_id=1 — отметить чат как прочитанный
+    if method == "POST" and action == "mark_read":
+        chat_id = params.get("chat_id")
+        if not chat_id or not session_id:
+            return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "chat_id and session required"})}
+        conn = get_conn()
+        user_id = get_user_id_from_session(session_id, conn)
+        if user_id:
+            cur = conn.cursor()
+            cur.execute(f"""
+                UPDATE {SCHEMA}.chat_members SET last_read_at = now()
+                WHERE chat_id = %s AND user_id = %s
+            """, (int(chat_id), user_id))
+            conn.commit()
+            cur.close()
+        conn.close()
+        return {"statusCode": 200, "headers": CORS, "body": json.dumps({"ok": True})}
 
     # GET ?action=messages&chat_id=1[&after=42] — сообщения чата
     if method == "GET" and action == "messages":

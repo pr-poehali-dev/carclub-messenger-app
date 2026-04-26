@@ -307,12 +307,14 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
     setMessages([]);
     lastIdRef.current = 0;
     setActiveChat(chat);
+    setChatList(prev => prev.map(c => c.id === chat.id ? { ...c, unread: 0 } : c));
+    fetch(`${API}?action=mark_read&chat_id=${chat.id}`, { method: "POST", headers: { "X-Session-Id": sessionId } });
     await loadMessages(chat.id, 0);
     setLoading(false);
     pollRef.current = setInterval(() => {
       loadMessages(chat.id, lastIdRef.current);
     }, 3000);
-  }, [loadMessages]);
+  }, [loadMessages, sessionId]);
 
   // Закрываем чат — останавливаем поллинг
   const closeChat = useCallback(() => {
