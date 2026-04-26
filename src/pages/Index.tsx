@@ -255,6 +255,7 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
   const lastIdRef = useRef(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -353,7 +354,7 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
       body: JSON.stringify({
         sender: user.nickname,
         title: `${user.nickname} • ${activeChat.name}`,
-        message: optimistic.type === "image" ? "📷 Фото" : optimistic.type === "voice" ? "🎤 Голосовое" : optimistic.text,
+        message: optimistic.type === "image" ? "📷 Фото" : optimistic.type === "voice" ? "🎤 Голосовое" : optimistic.type === "video" ? "🎬 Видео" : optimistic.text,
       }),
     }).catch(() => {});
   };
@@ -387,6 +388,18 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
       const base64 = (reader.result as string).split(",")[1];
       const optimistic: Message = { id: Date.now(), text: "📷 Фото", time: now(), out: true, type: "image", mediaUrl: URL.createObjectURL(file), sender: user.nickname };
       await pushMessage(optimistic, { type: "image", media: base64, media_content_type: file.type, sender: user.nickname });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const sendVideo = async (file: File) => {
+    if (!activeChat || sending) return;
+    if (file.size > 50 * 1024 * 1024) { alert("Видео слишком большое. Максимум 50 МБ."); return; }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(",")[1];
+      const optimistic: Message = { id: Date.now(), text: "🎬 Видео", time: now(), out: true, type: "video", mediaUrl: URL.createObjectURL(file), sender: user.nickname };
+      await pushMessage(optimistic, { type: "video", media: base64, media_content_type: file.type, sender: user.nickname });
     };
     reader.readAsDataURL(file);
   };
@@ -692,6 +705,23 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
                     </button>
                   )}
                 </div>
+              ) : m.type === "video" && m.mediaUrl && !m.isRemoved ? (
+                <div className={`flex items-end gap-1 ${m.out ? "flex-row-reverse" : "flex-row"}`}>
+                  <div className={`max-w-[75%] ${m.out ? "msg-out" : "msg-in"} overflow-hidden p-1`}>
+                    {!m.out && m.sender && m.sender !== "me" && (
+                      <p className="text-xs font-semibold mb-1 px-2" style={{ color: "var(--neon-blue)" }}>{m.sender}</p>
+                    )}
+                    <video controls src={m.mediaUrl} className="rounded-xl w-full" style={{ maxHeight: 260, background: "#000" }} playsInline />
+                    <p className="text-xs mt-1 text-right px-2 pb-1" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
+                  </div>
+                  {m.out && (
+                    <button className="mb-1 p-1.5 rounded-full opacity-40 hover:opacity-80 transition-opacity"
+                      style={{ color: "#ff4d4d" }}
+                      onClick={(e) => setMsgMenu({ id: m.id, x: e.clientX, y: e.clientY })}>
+                      <Icon name="Trash2" size={14} />
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div className={`max-w-[75%] px-4 py-2.5 ${m.out ? "msg-out" : "msg-in"} ${m.isRemoved ? "opacity-50" : ""}`}>
                   {!m.out && m.sender && m.sender !== "me" && (
@@ -871,6 +901,8 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
         <div className="px-3 py-3" style={{ borderTop: "1px solid rgba(0,255,179,0.12)" }}>
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) sendImage(f); e.target.value = ""; }} />
+          <input ref={videoInputRef} type="file" accept="video/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) sendVideo(f); e.target.value = ""; }} />
           {/* Панель режима ответа */}
           {replyingTo && !editingMsg && (
             <div className="flex items-center gap-2 px-1 pb-2 animate-fade-in">
@@ -905,6 +937,14 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
                 className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
                 style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
                 <Icon name="Image" size={18} style={{ color: "rgba(255,255,255,0.5)" }} />
+              </button>
+            )}
+            {/* Видео (скрыть при редактировании) */}
+            {!editingMsg && (
+              <button onClick={() => videoInputRef.current?.click()}
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)" }}>
+                <Icon name="Video" size={18} style={{ color: "rgba(255,255,255,0.5)" }} />
               </button>
             )}
             {/* Эмодзи (скрыть при редактировании) */}

@@ -202,14 +202,23 @@ def handler(event: dict, context) -> dict:
 
         media_url = None
 
-        if msg_type in ("image", "voice") and media_data:
+        if msg_type in ("image", "voice", "video") and media_data:
             raw = base64.b64decode(media_data)
-            ext = "jpg" if msg_type == "image" else "webm"
-            if "ogg" in media_content_type: ext = "ogg"
-            elif "mp4" in media_content_type: ext = "mp4"
+            if msg_type == "image":
+                ext = "jpg"
+            elif msg_type == "video":
+                ext = "mp4"
+                if media_content_type and "webm" in media_content_type: ext = "webm"
+                elif media_content_type and "mov" in media_content_type: ext = "mov"
+            else:
+                ext = "webm"
+                if media_content_type and "ogg" in media_content_type: ext = "ogg"
+                elif media_content_type and "mp4" in media_content_type: ext = "mp4"
             media_url = upload_to_s3(raw, media_content_type, ext)
             if not text:
-                text = "📷 Фото" if msg_type == "image" else "🎤 Голосовое"
+                if msg_type == "image": text = "📷 Фото"
+                elif msg_type == "video": text = "🎬 Видео"
+                else: text = "🎤 Голосовое"
         elif msg_type == "emoji":
             if not text:
                 return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "emoji required"})}
