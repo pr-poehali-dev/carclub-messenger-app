@@ -664,15 +664,24 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
                   <p className="text-xs mt-1 text-right px-2 pb-1" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
                 </div>
               ) : m.type === "voice" && m.mediaUrl ? (
-                <div className={`max-w-[75%] px-3 py-2.5 ${m.out ? "msg-out" : "msg-in"}`}>
-                  {!m.out && m.sender && m.sender !== "me" && (
-                    <p className="text-xs font-semibold mb-1" style={{ color: "var(--neon-blue)" }}>{m.sender}</p>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <span style={{ fontSize: "1.1rem" }}>🎤</span>
-                    <audio controls src={m.mediaUrl} className="h-8" style={{ maxWidth: 160, filter: "invert(0.8)" }} />
+                <div className={`flex items-end gap-1 ${m.out ? "flex-row-reverse" : "flex-row"}`}>
+                  <div className={`max-w-[75%] px-3 py-2.5 ${m.out ? "msg-out" : "msg-in"}`}>
+                    {!m.out && m.sender && m.sender !== "me" && (
+                      <p className="text-xs font-semibold mb-1" style={{ color: "var(--neon-blue)" }}>{m.sender}</p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span style={{ fontSize: "1.1rem" }}>🎤</span>
+                      <audio controls src={m.mediaUrl} className="h-8" style={{ maxWidth: 160, filter: "invert(0.8)" }} />
+                    </div>
+                    <p className="text-xs mt-1 text-right" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
                   </div>
-                  <p className="text-xs mt-1 text-right" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
+                  {m.out && (
+                    <button className="mb-1 p-1.5 rounded-full opacity-40 hover:opacity-80 transition-opacity"
+                      style={{ color: "#ff4d4d" }}
+                      onClick={(e) => setMsgMenu({ id: m.id, x: e.clientX, y: e.clientY })}>
+                      <Icon name="Trash2" size={14} />
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className={`max-w-[75%] px-4 py-2.5 ${m.out ? "msg-out" : "msg-in"} ${m.isRemoved ? "opacity-50" : ""}`}>
