@@ -251,6 +251,7 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
   const [replyingTo, setReplyingTo] = useState<{ id: number; text: string; sender: string } | null>(null);
   const [reactionPicker, setReactionPicker] = useState<number | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastIdRef = useRef(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -682,7 +683,7 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
                   {!m.out && m.sender && m.sender !== "me" && (
                     <p className="text-xs font-semibold mb-1 px-2" style={{ color: "var(--neon-blue)" }}>{m.sender}</p>
                   )}
-                  <img src={m.mediaUrl} alt="фото" className="rounded-xl w-full object-cover" style={{ maxHeight: 220 }} />
+                  <img src={m.mediaUrl} alt="фото" className="rounded-xl w-full object-cover cursor-pointer" style={{ maxHeight: 220 }} onClick={() => setLightboxUrl(m.mediaUrl!)} />
                   <p className="text-xs mt-1 text-right px-2 pb-1" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
                 </div>
               ) : m.type === "voice" && m.mediaUrl && !m.isRemoved ? (
@@ -1072,6 +1073,29 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
           Новый чат
         </button>
       </div>
+
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.92)" }}
+          onClick={() => setLightboxUrl(null)}
+        >
+          <img
+            src={lightboxUrl}
+            alt="фото"
+            className="max-w-full max-h-full rounded-xl"
+            style={{ maxWidth: "96vw", maxHeight: "92vh", objectFit: "contain" }}
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+            onClick={() => setLightboxUrl(null)}
+          >
+            <Icon name="X" size={20} />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
