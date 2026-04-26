@@ -228,7 +228,7 @@ function NeonBadge({ label, color }: { label: string; color: string }) {
 }
 
 // ─── CHATS SCREEN ─────────────────────────────────────────────────────────────
-function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionId: string; onUnreadChange?: (n: number) => void }) {
+function ChatsScreen({ user, sessionId, onUnreadChange, onOpenLightbox }: { user: User; sessionId: string; onUnreadChange?: (n: number) => void; onOpenLightbox?: (url: string) => void }) {
   const [chatList, setChatList] = useState<Chat[]>(chats);
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -251,7 +251,7 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
   const [replyingTo, setReplyingTo] = useState<{ id: number; text: string; sender: string } | null>(null);
   const [reactionPicker, setReactionPicker] = useState<number | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
-  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const lastIdRef = useRef(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -683,7 +683,7 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
                   {!m.out && m.sender && m.sender !== "me" && (
                     <p className="text-xs font-semibold mb-1 px-2" style={{ color: "var(--neon-blue)" }}>{m.sender}</p>
                   )}
-                  <img src={m.mediaUrl} alt="фото" className="rounded-xl w-full object-cover cursor-pointer" style={{ maxHeight: 220 }} onClick={() => setLightboxUrl(m.mediaUrl!)} />
+                  <img src={m.mediaUrl} alt="фото" className="rounded-xl w-full object-cover cursor-pointer" style={{ maxHeight: 220 }} onClick={() => onOpenLightbox?.(m.mediaUrl!)} />
                   <p className="text-xs mt-1 text-right px-2 pb-1" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
                 </div>
               ) : m.type === "voice" && m.mediaUrl && !m.isRemoved ? (
@@ -1074,28 +1074,6 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
         </button>
       </div>
 
-      {lightboxUrl && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center"
-          style={{ background: "rgba(0,0,0,0.92)" }}
-          onClick={() => setLightboxUrl(null)}
-        >
-          <img
-            src={lightboxUrl}
-            alt="фото"
-            className="max-w-full max-h-full rounded-xl"
-            style={{ maxWidth: "96vw", maxHeight: "92vh", objectFit: "contain" }}
-            onClick={e => e.stopPropagation()}
-          />
-          <button
-            className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
-            style={{ background: "rgba(255,255,255,0.15)" }}
-            onClick={() => setLightboxUrl(null)}
-          >
-            <Icon name="X" size={20} />
-          </button>
-        </div>
-      )}
     </div>
   );
 }
@@ -2863,6 +2841,7 @@ export default function Index() {
   const [tab, setTab] = useState<Tab>("chats");
   const [session, setSession] = useState<{ user: User; session_id: string } | null>(() => getSession());
   const [unreadCount, setUnreadCount] = useState(0);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
 
   // Фоновый polling непрочитанных — работает на всех вкладках
   useEffect(() => {
@@ -2936,7 +2915,7 @@ export default function Index() {
 
 
   const WRAP = (
-    <div className="flex items-center justify-center min-h-screen"
+    <div className="relative flex items-center justify-center min-h-screen"
       style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(0,255,179,0.04) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(0,212,255,0.04) 0%, transparent 60%), var(--bg-dark)" }}>
       <div className="relative flex flex-col w-full max-w-sm h-screen max-h-[812px] overflow-hidden rounded-none sm:rounded-[36px]"
         style={{ background: "var(--bg-dark)", border: "1px solid rgba(0,255,179,0.1)", boxShadow: "0 0 60px rgba(0,255,179,0.07), 0 0 120px rgba(0,212,255,0.04), 0 40px 100px rgba(0,0,0,0.6)" }}>
@@ -2971,7 +2950,7 @@ export default function Index() {
 
             {/* Content */}
             <div className="flex-1 overflow-hidden">
-              {tab === "chats" && <ChatsScreen user={session.user} sessionId={session.session_id} onUnreadChange={setUnreadCount} />}
+              {tab === "chats" && <ChatsScreen user={session.user} sessionId={session.session_id} onUnreadChange={setUnreadCount} onOpenLightbox={setLightboxUrl} />}
               {tab === "events" && <EventsScreen user={session.user} sessionId={session.session_id} />}
               {tab === "gallery" && <GalleryScreen user={session.user} sessionId={session.session_id} />}
               {tab === "members" && <MembersScreen />}
@@ -3007,6 +2986,28 @@ export default function Index() {
           </>
         )}
       </div>
+
+      {lightboxUrl && (
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{ background: "rgba(0,0,0,0.93)", zIndex: 99999 }}
+          onClick={() => setLightboxUrl(null)}
+        >
+          <img
+            src={lightboxUrl}
+            alt="фото"
+            style={{ maxWidth: "96vw", maxHeight: "92vh", objectFit: "contain", borderRadius: 16 }}
+            onClick={e => e.stopPropagation()}
+          />
+          <button
+            className="absolute top-4 right-4 w-10 h-10 rounded-full flex items-center justify-center"
+            style={{ background: "rgba(255,255,255,0.15)" }}
+            onClick={() => setLightboxUrl(null)}
+          >
+            <Icon name="X" size={20} />
+          </button>
+        </div>
+      )}
     </div>
   );
 
