@@ -321,7 +321,7 @@ function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionI
     pollRef.current = setInterval(() => {
       loadMessages(chat.id, lastIdRef.current);
     }, 3000);
-  }, [loadMessages, sessionId]);
+  }, [loadMessages, sessionId, onUnreadChange]);
 
   // Закрываем чат — останавливаем поллинг
   const closeChat = useCallback(() => {
@@ -2809,7 +2809,7 @@ export default function Index() {
     { id: "settings", icon: "Settings", label: "Настройки" },
   ];
 
-  const [pushEnabled, setPushEnabled] = useState(Notification.permission === "granted");
+
 
   const subscribeToPush = async (session_id: string) => {
     try {
@@ -2829,7 +2829,6 @@ export default function Index() {
         headers: { "Content-Type": "application/json", "X-Session-Id": session_id },
         body: JSON.stringify(sub.toJSON()),
       });
-      setPushEnabled(true);
     } catch { /* тихо игнорируем */ }
   };
 
@@ -2857,19 +2856,7 @@ export default function Index() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Polling unread для колокольчика (работает на всех вкладках)
-  useEffect(() => {
-    if (!session) return;
-    const fetchUnread = () => {
-      apiGetChats(session.session_id).then(data => {
-        if (Array.isArray(data)) setUnreadCount(data.reduce((s, c) => s + (c.unread || 0), 0));
-      }).catch(() => {});
-    };
-    fetchUnread();
-    const t = setInterval(fetchUnread, 10000);
-    return () => clearInterval(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!session]);
+
 
   const WRAP = (
     <div className="flex items-center justify-center min-h-screen"
@@ -2900,15 +2887,6 @@ export default function Index() {
                       : session.user.nickname[0].toUpperCase()}
                   </div>
                 </div>
-                <button className="relative" onClick={() => subscribeToPush(session.session_id)}>
-                  <Icon name="Bell" size={20} style={{ color: pushEnabled ? "var(--neon-green)" : "rgba(255,255,255,0.5)" }} />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center font-bold"
-                      style={{ background: "var(--neon-green)", color: "var(--bg-dark)", fontSize: "9px" }}>
-                      {unreadCount}
-                    </span>
-                  )}
-                </button>
                 <span className="w-2.5 h-2.5 rounded-full animate-pulse-neon"
                   style={{ background: "var(--neon-green)", boxShadow: "0 0 6px var(--neon-green)" }} />
               </div>
@@ -2932,7 +2910,7 @@ export default function Index() {
                   <div className="relative">
                     <Icon name={item.icon} size={21}
                       style={{ color: tab === item.id ? "var(--neon-green)" : "rgba(255,255,255,0.3)", filter: tab === item.id ? "drop-shadow(0 0 5px rgba(0,255,179,0.8))" : "none", transition: "all 0.2s ease" }} />
-                    {item.id === "chats" && unreadCount > 0 && tab !== "chats" && (
+                    {item.id === "chats" && unreadCount > 0 && (
                       <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold"
                         style={{ background: "var(--neon-green)", color: "var(--bg-dark)", fontSize: "8px" }}>
                         {unreadCount}
