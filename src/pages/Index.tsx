@@ -2857,6 +2857,20 @@ export default function Index() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Polling unread для колокольчика (работает на всех вкладках)
+  useEffect(() => {
+    if (!session) return;
+    const fetchUnread = () => {
+      apiGetChats(session.session_id).then(data => {
+        if (Array.isArray(data)) setUnreadCount(data.reduce((s, c) => s + (c.unread || 0), 0));
+      }).catch(() => {});
+    };
+    fetchUnread();
+    const t = setInterval(fetchUnread, 10000);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [!!session]);
+
   const WRAP = (
     <div className="flex items-center justify-center min-h-screen"
       style={{ background: "radial-gradient(ellipse at 20% 50%, rgba(0,255,179,0.04) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(0,212,255,0.04) 0%, transparent 60%), var(--bg-dark)" }}>
