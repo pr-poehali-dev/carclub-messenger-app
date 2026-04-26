@@ -2089,7 +2089,7 @@ function SettingsScreen({ user, sessionId, onAvatarChange, onProfileUpdate }: {
       });
       const data = await res.json();
       setUploading(false);
-      if (res.ok && data.avatar_url) onAvatarChange(data.avatar_url);
+      if (res.ok && data.avatar_url) onAvatarChange(data.avatar_url + "?t=" + Date.now());
     };
     reader.readAsDataURL(file);
     e.target.value = "";
