@@ -228,7 +228,7 @@ function NeonBadge({ label, color }: { label: string; color: string }) {
 }
 
 // ─── CHATS SCREEN ─────────────────────────────────────────────────────────────
-function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
+function ChatsScreen({ user, sessionId, onUnreadChange }: { user: User; sessionId: string; onUnreadChange?: (n: number) => void }) {
   const [chatList, setChatList] = useState<Chat[]>(chats);
   const [activeChat, setActiveChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -264,7 +264,10 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
   // Загружаем список чатов из API
   useEffect(() => {
     apiGetChats(sessionId).then(data => {
-      if (Array.isArray(data) && data.length > 0) setChatList(data);
+      if (Array.isArray(data) && data.length > 0) {
+        setChatList(data);
+        onUnreadChange?.(data.reduce((s, c) => s + (c.unread || 0), 0));
+      }
     }).catch(() => {});
   }, []);
 
@@ -307,7 +310,11 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
     setMessages([]);
     lastIdRef.current = 0;
     setActiveChat(chat);
-    setChatList(prev => prev.map(c => c.id === chat.id ? { ...c, unread: 0 } : c));
+    setChatList(prev => {
+      const updated = prev.map(c => c.id === chat.id ? { ...c, unread: 0 } : c);
+      onUnreadChange?.(updated.reduce((s, c) => s + (c.unread || 0), 0));
+      return updated;
+    });
     fetch(`${API}?action=mark_read&chat_id=${chat.id}`, { method: "POST", headers: { "X-Session-Id": sessionId } });
     await loadMessages(chat.id, 0);
     setLoading(false);
@@ -2791,6 +2798,7 @@ function LoginScreen({ onLogin }: { onLogin: (user: User, sid: string) => void }
 export default function Index() {
   const [tab, setTab] = useState<Tab>("chats");
   const [session, setSession] = useState<{ user: User; session_id: string } | null>(() => getSession());
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const navItems: { id: Tab; icon: string; label: string }[] = [
     { id: "chats", icon: "MessageCircle", label: "Чаты" },
@@ -2801,7 +2809,6 @@ export default function Index() {
     { id: "settings", icon: "Settings", label: "Настройки" },
   ];
 
-  const unread = chats.reduce((s, c) => s + c.unread, 0);
   const [pushEnabled, setPushEnabled] = useState(Notification.permission === "granted");
 
   const subscribeToPush = async (session_id: string) => {
@@ -2881,10 +2888,10 @@ export default function Index() {
                 </div>
                 <button className="relative" onClick={() => subscribeToPush(session.session_id)}>
                   <Icon name="Bell" size={20} style={{ color: pushEnabled ? "var(--neon-green)" : "rgba(255,255,255,0.5)" }} />
-                  {unread > 0 && (
+                  {unreadCount > 0 && (
                     <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center font-bold"
                       style={{ background: "var(--neon-green)", color: "var(--bg-dark)", fontSize: "9px" }}>
-                      {unread}
+                      {unreadCount}
                     </span>
                   )}
                 </button>
@@ -2895,7 +2902,7 @@ export default function Index() {
 
             {/* Content */}
             <div className="flex-1 overflow-hidden">
-              {tab === "chats" && <ChatsScreen user={session.user} sessionId={session.session_id} />}
+              {tab === "chats" && <ChatsScreen user={session.user} sessionId={session.session_id} onUnreadChange={setUnreadCount} />}
               {tab === "events" && <EventsScreen user={session.user} sessionId={session.session_id} />}
               {tab === "gallery" && <GalleryScreen user={session.user} sessionId={session.session_id} />}
               {tab === "members" && <MembersScreen />}
@@ -2911,10 +2918,10 @@ export default function Index() {
                   <div className="relative">
                     <Icon name={item.icon} size={21}
                       style={{ color: tab === item.id ? "var(--neon-green)" : "rgba(255,255,255,0.3)", filter: tab === item.id ? "drop-shadow(0 0 5px rgba(0,255,179,0.8))" : "none", transition: "all 0.2s ease" }} />
-                    {item.id === "chats" && unread > 0 && tab !== "chats" && (
+                    {item.id === "chats" && unreadCount > 0 && tab !== "chats" && (
                       <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold"
                         style={{ background: "var(--neon-green)", color: "var(--bg-dark)", fontSize: "8px" }}>
-                        {unread}
+                        {unreadCount}
                       </span>
                     )}
                   </div>
