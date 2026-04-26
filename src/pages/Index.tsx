@@ -648,7 +648,7 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
           {messages.map(m => (
             <div key={m.id} id={`msg-${m.id}`} className={`flex ${m.out ? "justify-end" : "justify-start"} animate-fade-in`}
               onContextMenu={!m.isRemoved ? (e) => { e.preventDefault(); setMsgMenu({ id: m.id, x: e.clientX, y: e.clientY }); } : undefined}
-              onTouchStart={!m.isRemoved ? (() => { let t: ReturnType<typeof setTimeout>; return (e: React.TouchEvent) => { const touch = e.touches[0]; t = setTimeout(() => setMsgMenu({ id: m.id, x: touch.clientX, y: touch.clientY }), 500); }; })() : undefined}
+              onTouchStart={!m.isRemoved ? (() => { let t: ReturnType<typeof setTimeout>; let moved = false; const onMove = () => { moved = true; }; const onEnd = () => { clearTimeout(t); document.removeEventListener("touchmove", onMove); document.removeEventListener("touchend", onEnd); }; return (e: React.TouchEvent) => { moved = false; const touch = e.touches[0]; const x = touch.clientX; const y = touch.clientY; document.addEventListener("touchmove", onMove, { passive: true }); document.addEventListener("touchend", onEnd, { once: true }); t = setTimeout(() => { if (!moved) setMsgMenu({ id: m.id, x, y }); }, 600); }; })() : undefined}
             >
               {m.type === "emoji" ? (
                 <div className={`flex flex-col ${m.out ? "items-end" : "items-start"}`}>
