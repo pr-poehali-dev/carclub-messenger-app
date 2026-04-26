@@ -663,7 +663,7 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
                   <img src={m.mediaUrl} alt="фото" className="rounded-xl w-full object-cover" style={{ maxHeight: 220 }} />
                   <p className="text-xs mt-1 text-right px-2 pb-1" style={{ color: "rgba(255,255,255,0.4)" }}>{m.time}</p>
                 </div>
-              ) : m.type === "voice" && m.mediaUrl ? (
+              ) : m.type === "voice" && m.mediaUrl && !m.isRemoved ? (
                 <div className={`flex items-end gap-1 ${m.out ? "flex-row-reverse" : "flex-row"}`}>
                   <div className={`max-w-[75%] px-3 py-2.5 ${m.out ? "msg-out" : "msg-in"}`}>
                     {!m.out && m.sender && m.sender !== "me" && (
