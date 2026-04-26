@@ -60,6 +60,7 @@ export default function ChatsScreen({ user, sessionId, onUnreadChange, onOpenLig
   const [reactionPicker, setReactionPicker] = useState<number | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isInitialLoadRef = useRef(true);
   const lastIdRef = useRef(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -143,12 +144,13 @@ export default function ChatsScreen({ user, sessionId, onUnreadChange, onOpenLig
   }, []);
 
   useEffect(() => {
-    if (!bottomRef.current) return;
+    const container = messagesContainerRef.current;
+    if (!container) return;
     if (isInitialLoadRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: "instant" });
+      container.scrollTop = container.scrollHeight;
       isInitialLoadRef.current = false;
     } else {
-      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+      bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
 
@@ -471,7 +473,7 @@ export default function ChatsScreen({ user, sessionId, onUnreadChange, onOpenLig
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
           {loading && (
             <div className="flex justify-center py-4">
               <div className="w-5 h-5 rounded-full border-2 border-t-transparent animate-spin" style={{ borderColor: "rgba(0,255,179,0.4)", borderTopColor: "transparent" }} />
