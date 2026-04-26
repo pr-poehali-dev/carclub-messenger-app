@@ -60,6 +60,7 @@ export default function ChatsScreen({ user, sessionId, onUnreadChange, onOpenLig
   const [reactionPicker, setReactionPicker] = useState<number | null>(null);
   const [recordingTime, setRecordingTime] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const isInitialLoadRef = useRef(true);
   const lastIdRef = useRef(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,6 +117,7 @@ export default function ChatsScreen({ user, sessionId, onUnreadChange, onOpenLig
     setLoading(true);
     setMessages([]);
     lastIdRef.current = 0;
+    isInitialLoadRef.current = true;
     setActiveChat(chat);
     setChatList(prev => {
       const updated = prev.map(c => c.id === chat.id ? { ...c, unread: 0 } : c);
@@ -141,7 +143,13 @@ export default function ChatsScreen({ user, sessionId, onUnreadChange, onOpenLig
   }, []);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (!bottomRef.current) return;
+    if (isInitialLoadRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: "instant" });
+      isInitialLoadRef.current = false;
+    } else {
+      bottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   const pushMessage = async (optimistic: Message, payload: Parameters<typeof apiSendMessage>[1]) => {
