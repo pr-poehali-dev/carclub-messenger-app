@@ -2849,7 +2849,7 @@ export default function Index() {
       }).catch(() => {});
     };
     fetch_unread();
-    const t = setInterval(fetch_unread, 15000);
+    const t = setInterval(fetch_unread, 5000);
     return () => clearInterval(t);
   }, [session?.session_id]);
 

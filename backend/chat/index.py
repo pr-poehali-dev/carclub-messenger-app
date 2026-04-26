@@ -133,8 +133,9 @@ def handler(event: dict, context) -> dict:
         if user_id:
             cur = conn.cursor()
             cur.execute(f"""
-                UPDATE {SCHEMA}.chat_members SET last_read_at = now()
-                WHERE chat_id = %s AND user_id = %s
+                INSERT INTO {SCHEMA}.chat_members (chat_id, user_id, last_read_at)
+                VALUES (%s, %s, now())
+                ON CONFLICT (chat_id, user_id) DO UPDATE SET last_read_at = now()
             """, (int(chat_id), user_id))
             conn.commit()
             cur.close()
