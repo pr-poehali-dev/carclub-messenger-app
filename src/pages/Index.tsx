@@ -738,7 +738,7 @@ function ChatsScreen({ user, sessionId }: { user: User; sessionId: string }) {
             return (
               <div className="fixed inset-0 z-50" onClick={() => setMsgMenu(null)}>
                 <div className="absolute rounded-2xl overflow-hidden shadow-xl"
-                  style={{ left: Math.min(msgMenu.x, window.innerWidth - 190), top: Math.min(msgMenu.y, window.innerHeight - 130), background: "rgba(20,20,30,0.97)", border: "1px solid rgba(0,255,179,0.2)", backdropFilter: "blur(16px)", minWidth: 170 }}
+                  style={{ left: Math.min(msgMenu.x, window.innerWidth - 190), top: msgMenu.y + 200 > window.innerHeight ? Math.max(8, msgMenu.y - 200) : msgMenu.y, background: "rgba(20,20,30,0.97)", border: "1px solid rgba(0,255,179,0.2)", backdropFilter: "blur(16px)", minWidth: 170 }}
                   onClick={e => e.stopPropagation()}>
                   {/* Реакция */}
                   <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white hover:bg-white/5 transition-all text-left"
