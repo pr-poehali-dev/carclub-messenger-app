@@ -2840,6 +2840,19 @@ export default function Index() {
   const [session, setSession] = useState<{ user: User; session_id: string } | null>(() => getSession());
   const [unreadCount, setUnreadCount] = useState(0);
 
+  // Фоновый polling непрочитанных — работает на всех вкладках
+  useEffect(() => {
+    if (!session) return;
+    const fetch_unread = () => {
+      apiGetChats(session.session_id).then(data => {
+        if (Array.isArray(data)) setUnreadCount(data.reduce((s, c) => s + (c.unread || 0), 0));
+      }).catch(() => {});
+    };
+    fetch_unread();
+    const t = setInterval(fetch_unread, 15000);
+    return () => clearInterval(t);
+  }, [session?.session_id]);
+
   const navItems: { id: Tab; icon: string; label: string }[] = [
     { id: "chats", icon: "MessageCircle", label: "Чаты" },
     { id: "events", icon: "Calendar", label: "События" },
@@ -2950,7 +2963,7 @@ export default function Index() {
                   <div className="relative">
                     <Icon name={item.icon} size={21}
                       style={{ color: tab === item.id ? "var(--neon-green)" : "rgba(255,255,255,0.3)", filter: tab === item.id ? "drop-shadow(0 0 5px rgba(0,255,179,0.8))" : "none", transition: "all 0.2s ease" }} />
-                    {item.id === "chats" && unreadCount > 0 && (
+                    {item.id === "chats" && unreadCount > 0 && tab !== "chats" && (
                       <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center font-bold"
                         style={{ background: "var(--neon-green)", color: "var(--bg-dark)", fontSize: "8px" }}>
                         {unreadCount}
