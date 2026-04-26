@@ -187,6 +187,7 @@ def handler(event: dict, context) -> dict:
                 conn.close()
                 return {"statusCode": 400, "headers": CORS, "body": json.dumps({"error": "id required"})}
             cur = conn.cursor()
+            cur.execute(f"DELETE FROM {SCHEMA}.event_participants WHERE event_id=%s", (int(event_id),))
             cur.execute(f"DELETE FROM {SCHEMA}.events WHERE id=%s", (int(event_id),))
             conn.commit()
             cur.close()
